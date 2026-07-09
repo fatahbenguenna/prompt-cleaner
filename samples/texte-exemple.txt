@@ -6,5 +6,5 @@ Contact : paul.dupont@societe.fr — serveur de test : 192.168.1.42
 Clé d'API utilisée : sk-abc123def456ghi789jkl012
 
 (Les mots-clés google, fb44ja8k et myApp sont couverts par regles-exemple.cfg ;
-le chemin C:\Users\, l'e-mail, l'IP et la clé seront traités par la passe
-autonome des itérations 3 et 4.)
+le chemin C:\Users\, l'e-mail et l'IP sont remplacés par la passe autonome,
+et la clé d'API est signalée en rouge sans être modifiée.)

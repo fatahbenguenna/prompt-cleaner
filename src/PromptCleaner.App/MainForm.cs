@@ -304,7 +304,13 @@ public sealed class MainForm : Form
             RenderResult(result);
             CopyToClipboard(result.CleanText);
             _btnCopy.Enabled = result.CleanText.Length > 0;
-            SetStatus(DescribeResult(result.Stats));
+            string status = DescribeResult(result.Stats);
+            if (result.Warnings.Count > 0)
+            {
+                status += " — " + string.Join(" ", result.Warnings);
+            }
+
+            SetStatus(status);
         }
         catch (Exception ex)
         {

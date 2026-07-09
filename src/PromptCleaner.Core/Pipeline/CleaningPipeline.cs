@@ -19,9 +19,10 @@ public sealed class CleaningPipeline
 
         var segmented = new SegmentedText(text);
         DictionaryPass.Apply(segmented, rules);
+        var warnings = AutonomousPass.Apply(segmented);
 
         var (cleanText, spans) = segmented.Compose();
-        return new CleanResult(cleanText, spans, ComputeStats(spans));
+        return new CleanResult(cleanText, spans, ComputeStats(spans), warnings);
     }
 
     private static CleanStats ComputeStats(IReadOnlyList<TextSpan> spans)

@@ -36,8 +36,8 @@ Application Windows fenêtrée **100 % portable** (un seul `.exe`, aucune instal
 |---|---|---|
 | 1 | Solution .NET, fenêtre principale, publication portable, CI | ✅ fait |
 | 2 | Fichier de config (parseur, explorateur, auto-chargement), passe dictionnaire | ✅ fait |
-| 3–4 | Détecteurs autonomes D-01 à D-12 | ⏳ à venir |
-| 5 | Boucle presse-papier + rendu couleur | ✅ anticipé (déjà câblé) |
+| 3–4 | Détecteurs autonomes D-01 à D-12 | ✅ fait |
+| 5 | Boucle presse-papier + rendu couleur | ✅ fait |
 | 6 | Durcissement, accessibilité, release v1.0.0 | ⏳ à venir |
 
 ## Développement
