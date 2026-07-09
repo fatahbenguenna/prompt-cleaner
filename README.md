@@ -30,6 +30,32 @@ Application Windows fenêtrée **100 % portable** (un seul `.exe`, aucune instal
 | 3. Architecte — Architecture & choix techno | [`docs/architecture.md`](docs/architecture.md) |
 | 4. PO/SM — Backlog (stories, critères, itérations) | [`docs/backlog.md`](docs/backlog.md) |
 
+## État d'avancement
+
+| Itération (cf. `docs/backlog.md`) | Contenu | État |
+|---|---|---|
+| 1 | Solution .NET, fenêtre principale, publication portable, CI | ✅ fait |
+| 2 | Fichier de config (parseur, explorateur, auto-chargement), passe dictionnaire | ✅ fait |
+| 3–4 | Détecteurs autonomes D-01 à D-12 | ⏳ à venir |
+| 5 | Boucle presse-papier + rendu couleur | ✅ anticipé (déjà câblé) |
+| 6 | Durcissement, accessibilité, release v1.0.0 | ⏳ à venir |
+
+## Développement
+
+```bash
+dotnet build          # compile la solution (Windows, Linux ou macOS)
+dotnet test           # exécute les tests unitaires du moteur
+
+# Produit l'exécutable portable unique (publish/prompt-cleaner.exe) :
+dotnet publish src/PromptCleaner.App -c Release -r win-x64 --self-contained true \
+  -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true \
+  -p:IncludeNativeLibrariesForSelfExtract=true -o publish
+```
+
+La CI GitHub Actions (`.github/workflows/ci.yml`) rejoue build + tests + publication à chaque push et attache l'exécutable en artefact ; un tag `v*` crée une Release GitHub avec l'exe en pièce jointe.
+
+Des fichiers d'exemple sont fournis dans `samples/` (`regles-exemple.cfg`, `texte-exemple.txt`).
+
 ## Avertissement
 
 prompt-cleaner est une aide à l'anonymisation : les alertes rouges exigent une vérification humaine, et l'absence d'alerte ne garantit pas l'absence de donnée sensible. Le presse-papier est écrasé à chaque nettoyage.
