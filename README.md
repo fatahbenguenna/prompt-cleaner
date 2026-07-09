@@ -2,6 +2,10 @@
 
 Application Windows fenêtrée **100 % portable** (un seul `.exe`, aucune installation) qui nettoie un texte de ses données personnelles/confidentielles et copie automatiquement le résultat dans le presse-papier.
 
+## Téléchargement
+
+Récupérez `prompt-cleaner.exe` dans les [Releases GitHub](../../releases) (ou dans les artefacts de CI de n'importe quel run). Aucune installation, aucun droit administrateur, aucun runtime requis : posez le fichier où vous voulez (clé USB comprise) et double-cliquez. Windows 10/11 x64.
+
 ## Fonctionnement en bref
 
 1. **Charger config…** : sélection via l'explorateur Windows d'un fichier de règles `motclé : remplacement` :
@@ -16,6 +20,8 @@ Application Windows fenêtrée **100 % portable** (un seul `.exe`, aucune instal
 5. Le résultat s'affiche avec un code couleur (légende incluse) et est **copié automatiquement dans le presse-papier** :
    - 🟩 **vert** : mot remplacé,
    - 🟥 **rouge** : donnée suspecte non remplacée, à vérifier manuellement.
+
+Raccourcis clavier : `Alt+C` charger la config, `Alt+O` coller, `Alt+L` ou `Ctrl+Entrée` nettoyer, `Alt+P` copier.
 
 ## Technologie retenue
 
@@ -38,7 +44,7 @@ Application Windows fenêtrée **100 % portable** (un seul `.exe`, aucune instal
 | 2 | Fichier de config (parseur, explorateur, auto-chargement), passe dictionnaire | ✅ fait |
 | 3–4 | Détecteurs autonomes D-01 à D-12 | ✅ fait |
 | 5 | Boucle presse-papier + rendu couleur | ✅ fait |
-| 6 | Durcissement, accessibilité, release v1.0.0 | ⏳ à venir |
+| 6 | Durcissement, accessibilité, release v1.0.0 | ✅ fait |
 
 ## Développement
 

@@ -55,11 +55,12 @@ public sealed class MainForm : Form
             AcceptsTab = true,
             Font = textFont,
             Dock = DockStyle.Fill,
+            AccessibleName = "Texte d'entrée à nettoyer",
         };
 
         _btnClean = new Button
         {
-            Text = "🧹  Clean",
+            Text = "🧹  C&lean",
             AutoSize = true,
             Padding = new Padding(24, 6, 24, 6),
             Font = new Font(Font, FontStyle.Bold),
@@ -79,6 +80,7 @@ public sealed class MainForm : Form
             WordWrap = false,
             ScrollBars = RichTextBoxScrollBars.Both,
             Dock = DockStyle.Fill,
+            AccessibleName = "Résultat nettoyé (copié dans le presse-papier)",
         };
 
         _statusLabel = new ToolStripStatusLabel
