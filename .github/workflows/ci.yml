@@ -61,8 +61,12 @@ jobs:
       - name: Créer la release avec l'exe en pièce jointe
         env:
           GH_TOKEN: ${{ github.token }}
+        # Si la release existe déjà (tag créé depuis l'interface GitHub),
+        # on se contente d'y attacher l'exécutable.
         run: >
           gh release create "${{ github.ref_name }}" prompt-cleaner.exe
           --repo "${{ github.repository }}"
           --title "prompt-cleaner ${{ github.ref_name }}"
           --generate-notes
+          || gh release upload "${{ github.ref_name }}" prompt-cleaner.exe
+          --repo "${{ github.repository }}" --clobber
