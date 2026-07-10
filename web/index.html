@@ -1,0 +1,693 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- CSP verrouillée : ce fichier ne peut par construction contacter aucun
+     serveur — tout reste dans le navigateur (équivalent web de NFR-3). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'">
+<title>prompt-cleaner</title>
+<style>
+  :root {
+    --replaced-back: #c8f7c5; --replaced-fore: #1b5e20;   /* AA : 6,58:1 */
+    --alert-back: #f7c5c5;    --alert-fore: #8b1a1a;      /* AA : 6,08:1 */
+    --border: #c9c9c9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", system-ui, sans-serif;
+    margin: 0 auto; padding: 16px; max-width: 1000px;
+    background: #fafafa; color: #1a1a1a;
+  }
+  h1 { font-size: 1.3rem; margin: 0; }
+  .tagline { margin: 2px 0 14px; color: #555; font-size: .85rem; }
+  section { margin-bottom: 10px; }
+  .bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .bar .spacer { flex: 1; }
+  button {
+    font: inherit; padding: 5px 14px; cursor: pointer;
+    background: #fff; border: 1px solid var(--border); border-radius: 4px;
+  }
+  button:hover:not(:disabled) { background: #f0f0f0; }
+  button:disabled { opacity: .5; cursor: default; }
+  #btnClean { font-weight: 600; padding: 8px 28px; }
+  #btnHelp { font-weight: 700; padding: 5px 11px; }
+  .clean-row { text-align: center; margin: 12px 0; }
+  label.head { font-weight: 600; }
+  #lblConfig { color: #666; font-size: .9rem; }
+  .remember { font-size: .85rem; color: #555; user-select: none; }
+  textarea, #result {
+    width: 100%; height: 30vh; min-height: 140px; padding: 8px;
+    font: .9rem/1.4 Consolas, monospace;
+    border: 1px solid var(--border); border-radius: 4px; background: #fff;
+  }
+  textarea { resize: vertical; }
+  #result { overflow: auto; white-space: pre-wrap; word-break: break-word; }
+  #result:empty::before { content: "Le résultat s'affichera ici."; color: #999; }
+  .replaced { background: var(--replaced-back); color: var(--replaced-fore); border-radius: 2px; }
+  .alert { background: var(--alert-back); color: var(--alert-fore); border-radius: 2px; }
+  .legend { margin-top: 6px; font-size: .85rem; }
+  .chip { padding: 2px 8px; border-radius: 3px; margin-left: 4px; }
+  #status {
+    margin-top: 14px; padding: 8px 10px; font-size: .85rem;
+    background: #efefef; border: 1px solid var(--border); border-radius: 4px;
+  }
+  dialog {
+    border: 1px solid var(--border); border-radius: 6px; padding: 18px;
+    max-width: 640px; width: calc(100vw - 40px);
+  }
+  dialog::backdrop { background: rgba(0,0,0,.35); }
+  dialog h2 { margin-top: 0; font-size: 1.05rem; }
+  dialog pre {
+    background: #f5f5f5; border: 1px solid var(--border); border-radius: 4px;
+    padding: 10px; font: .85rem/1.45 Consolas, monospace;
+    overflow-x: auto; white-space: pre;
+  }
+  dialog ul { font-size: .9rem; padding-left: 20px; }
+  .dialog-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+  body.dragover { outline: 3px dashed #7aa7d9; outline-offset: -6px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🧹 prompt-cleaner</h1>
+  <p class="tagline">Nettoie un texte de ses données personnelles avant de le partager —
+  100 % hors-ligne : rien ne quitte ce navigateur.</p>
+</header>
+
+<section class="bar">
+  <button id="btnLoadConfig">Charger config…</button>
+  <input type="file" id="fileInput" accept=".cfg,.txt,text/plain" hidden>
+  <button id="btnHelp" aria-label="Aide sur le format du fichier de configuration" title="Format du fichier de configuration">?</button>
+  <span id="lblConfig">Aucune config chargée</span>
+  <span class="spacer"></span>
+  <label class="remember" title="Conserve les règles dans le stockage local de ce navigateur, jamais en ligne">
+    <input type="checkbox" id="chkRemember"> mémoriser dans ce navigateur
+  </label>
+</section>
+
+<section>
+  <div class="bar">
+    <label class="head" for="txtInput">Texte d'entrée</label>
+    <span class="spacer"></span>
+    <button id="btnPaste">Coller</button>
+  </div>
+  <textarea id="txtInput" spellcheck="false" placeholder="Collez votre texte ici (Ctrl+V)…"></textarea>
+</section>
+
+<div class="clean-row"><button id="btnClean" disabled>🧹 Clean</button></div>
+
+<section>
+  <div class="bar">
+    <label class="head">Résultat (copié automatiquement dans le presse-papier)</label>
+    <span class="spacer"></span>
+    <button id="btnCopy" disabled>Copier</button>
+  </div>
+  <div id="result" tabindex="0" aria-label="Résultat nettoyé"></div>
+  <div class="legend">Légende :
+    <span class="chip replaced">remplacé</span>
+    <span class="chip alert">suspect non remplacé (à vérifier)</span>
+  </div>
+</section>
+
+<footer id="status">Prêt — chargez un fichier de configuration puis collez votre texte.
+Astuce : vous pouvez aussi déposer votre fichier .cfg n'importe où sur la page.</footer>
+
+<dialog id="helpDialog">
+  <h2>Format du fichier de configuration</h2>
+  <p>Fichier texte (UTF-8), une règle par ligne au format « motclé : remplacement ».
+  Au nettoyage, chaque occurrence du motclé est remplacée par la valeur de droite.</p>
+  <pre id="helpExample"># Les lignes vides et celles commençant par # sont ignorées.
+# Une règle par ligne, au format : motclé : remplacement
+
+google : mon-entreprise
+fb44ja8k : nom-user
+myApp : nom-application
+
+# La casse des mots-clés est ignorée (Google = google = GOOGLE).
+# Seul le premier « : » sépare : la valeur peut en contenir.
+portail : https://intranet.exemple:8080/accueil</pre>
+  <ul>
+    <li>En cas de mot-clé en double, la dernière ligne gagne.</li>
+    <li>Les mots-clés les plus longs sont appliqués en premier.</li>
+    <li>Cochez « mémoriser dans ce navigateur » pour retrouver vos règles à la prochaine visite
+    (stockage local uniquement, jamais envoyé en ligne).</li>
+  </ul>
+  <div class="dialog-buttons">
+    <button id="btnCopyExample">Copier l'exemple</button>
+    <button id="btnCloseHelp">Fermer</button>
+  </div>
+</dialog>
+
+<script>
+"use strict";
+/*ENGINE-START*/
+// ============================================================================
+// Moteur de nettoyage — portage JavaScript de PromptCleaner.Core (C#).
+// Mêmes règles : passe 1 dictionnaire (mots-clés longs d'abord, casse
+// ignorée, pas de remplacement en cascade), passe 2 détecteurs D-01 → D-12
+// (jetons stables XX_TYPE_XX, chevauchements arbitrés par ordre de détecteur).
+// ============================================================================
+const PromptCleaner = (() => {
+
+  // ----- Fichier de configuration ------------------------------------------
+
+  function parseConfig(content) {
+    content = String(content).replace(/^\uFEFF/, "");
+    const rules = [];
+    const indexByKeyword = new Map();
+    let ignoredLineCount = 0;
+    let duplicateKeywordCount = 0;
+
+    for (const rawLine of content.split("\n")) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith("#")) continue;
+
+      // Seul le premier « : » sépare : la valeur peut en contenir.
+      const separator = line.indexOf(":");
+      if (separator < 0) { ignoredLineCount++; continue; }
+      const keyword = line.slice(0, separator).trim();
+      const replacement = line.slice(separator + 1).trim();
+      if (!keyword || !replacement) { ignoredLineCount++; continue; }
+
+      const key = keyword.toLowerCase();
+      if (indexByKeyword.has(key)) {
+        duplicateKeywordCount++;
+        rules[indexByKeyword.get(key)] = { keyword, replacement };
+      } else {
+        indexByKeyword.set(key, rules.length);
+        rules.push({ keyword, replacement });
+      }
+    }
+    return { rules, ignoredLineCount, duplicateKeywordCount };
+  }
+
+  // ----- Texte segmenté ------------------------------------------------------
+  // Un segment verrouillé (remplacé ou alerté) n'est plus jamais re-analysé.
+
+  const freeSegment = text => ({ text, locked: false });
+  const escapeRegex = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+  // Applique à un segment libre des édits triés et sans chevauchement.
+  // replacement === null ⇒ alerte (texte conservé, marqué).
+  function splitSegment(segment, edits) {
+    const out = [];
+    let position = 0;
+    for (const e of edits) {
+      if (e.start > position) out.push(freeSegment(segment.text.slice(position, e.start)));
+      const original = segment.text.slice(e.start, e.start + e.length);
+      out.push({
+        text: e.replacement === null ? original : e.replacement,
+        locked: true,
+        kind: e.replacement === null ? "alert" : "replaced",
+        detectorId: e.detectorId,
+        original,
+      });
+      position = e.start + e.length;
+    }
+    if (position < segment.text.length) out.push(freeSegment(segment.text.slice(position)));
+    return out;
+  }
+
+  // ----- Passe 1 : dictionnaire ---------------------------------------------
+
+  function dictionaryPass(segments, rules) {
+    const ordered = rules
+      .filter(r => r.keyword.length > 0)
+      .slice()
+      .sort((a, b) => b.keyword.length - a.keyword.length
+        || a.keyword.toLowerCase().localeCompare(b.keyword.toLowerCase()));
+
+    for (const rule of ordered) {
+      const pattern = new RegExp(escapeRegex(rule.keyword), "gi");
+      const next = [];
+      for (const segment of segments) {
+        if (segment.locked) { next.push(segment); continue; }
+        const edits = [];
+        for (const m of segment.text.matchAll(pattern)) {
+          edits.push({ start: m.index, length: m[0].length, replacement: rule.replacement, detectorId: "config" });
+        }
+        next.push(...(edits.length ? splitSegment(segment, edits) : [segment]));
+      }
+      segments = next;
+    }
+    return segments;
+  }
+
+  // ----- Passe 2 : détecteurs autonomes -------------------------------------
+
+  const GENERIC_PROFILES = new Set(["public", "default", "default user", "all users"]);
+  const WELL_KNOWN_DOMAINS = [
+    "github.com", "gitlab.com", "bitbucket.org",
+    "stackoverflow.com", "stackexchange.com",
+    "google.com", "microsoft.com", "apple.com", "mozilla.org",
+    "wikipedia.org", "developer.mozilla.org",
+    "nuget.org", "npmjs.com", "pypi.org", "apache.org",
+    "example.com", "example.org", "example.net", "localhost",
+  ];
+
+  function isValidIban(iban) {
+    if (iban.length < 15 || iban.length > 34) return false;
+    // Contrôle mod 97 (ISO 7064) : les 4 premiers caractères passent en queue.
+    const rearranged = iban.slice(4) + iban.slice(0, 4);
+    let mod = 0;
+    for (const c of rearranged) {
+      if (c >= "0" && c <= "9") mod = (mod * 10 + (c.charCodeAt(0) - 48)) % 97;
+      else if (c >= "A" && c <= "Z") mod = (mod * 100 + (c.charCodeAt(0) - 55)) % 97;
+      else return false;
+    }
+    return mod === 1;
+  }
+
+  function hasValidNirKey(nir) {
+    if (nir.length !== 15) return false;
+    // Corse : 2A vaut 19 et 2B vaut 18 dans le calcul de la clé.
+    const number = nir.slice(0, 13).replace(/2A/i, "19").replace(/2B/i, "18");
+    if (!/^\d{13}$/.test(number)) return false;
+    return Number(nir.slice(13)) === 97 - Number(number) % 97;
+  }
+
+  function passesLuhn(digits) {
+    let sum = 0, doubleIt = false;
+    for (let i = digits.length - 1; i >= 0; i--) {
+      let d = digits.charCodeAt(i) - 48;
+      if (doubleIt) { d *= 2; if (d > 9) d -= 9; }
+      sum += d;
+      doubleIt = !doubleIt;
+    }
+    return sum % 10 === 0;
+  }
+
+  function shannonEntropy(value) {
+    const counts = new Map();
+    for (const c of value) counts.set(c, (counts.get(c) || 0) + 1);
+    let entropy = 0;
+    for (const count of counts.values()) {
+      const p = count / value.length;
+      entropy -= p * Math.log2(p);
+    }
+    return entropy;
+  }
+
+  // Majuscules + minuscules + chiffres : écarte les hash hexadécimaux purs.
+  function looksLikeSecret(candidate) {
+    return /[A-Z]/.test(candidate) && /[a-z]/.test(candidate) && /\d/.test(candidate)
+      && shannonEntropy(candidate) >= 3.8;
+  }
+
+  function extractHost(url) {
+    const start = url.indexOf("://") + 3;
+    const end = url.slice(start).search(/[/:?#]/);
+    const host = (end < 0 ? url.slice(start) : url.slice(start, start + end)).replace(/\.+$/, "");
+    return host.toLowerCase();
+  }
+
+  const isWellKnownHost = host =>
+    WELL_KNOWN_DOMAINS.some(d => host === d || host.endsWith("." + d));
+
+  // Chaque détecteur émet {start, length, kind, type, value} ou null.
+  const DETECTORS = [
+    {
+      id: "D-01", // nom d'utilisateur dans un chemin Windows
+      pattern: /(?<=[A-Za-z]:\\(?:Users|Documents and Settings)\\)(?:[^\\/:*?"<>|\r\n]+(?=\\)|[^\\/:*?"<>|\s.,;!?)»«"']+)/gi,
+      refine(m) {
+        // Un compte Windows ne peut pas finir par un espace ou un point.
+        const name = m[0].replace(/[ .]+$/, "");
+        if (!name || GENERIC_PROFILES.has(name.toLowerCase())) return null;
+        return { start: m.index, length: name.length, kind: "replace", type: "USER", value: name };
+      },
+    },
+    {
+      id: "D-02", // serveur dans un chemin UNC
+      pattern: /(?<=\\\\)[A-Za-z0-9][A-Za-z0-9._-]{0,62}(?=\\)/g,
+      refine(m) {
+        if (m[0].toLowerCase() === "localhost") return null;
+        return { start: m.index, length: m[0].length, kind: "replace", type: "HOST", value: m[0] };
+      },
+    },
+    {
+      id: "D-03", // e-mail
+      pattern: /(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g,
+      refine: m => ({ start: m.index, length: m[0].length, kind: "replace", type: "EMAIL", value: m[0] }),
+    },
+    {
+      id: "D-04", // IPv4 hors localhost et plages de documentation (RFC 5737)
+      pattern: /(?<![\d.])(?:(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)(?!\.?\d)/g,
+      refine(m) {
+        const ip = m[0];
+        if (ip.startsWith("127.") || ip === "0.0.0.0" || ip === "255.255.255.255"
+          || ip.startsWith("192.0.2.") || ip.startsWith("198.51.100.") || ip.startsWith("203.0.113.")) return null;
+        return { start: m.index, length: ip.length, kind: "replace", type: "IP", value: ip };
+      },
+    },
+    {
+      id: "D-05", // téléphone français
+      pattern: /(?<!\d)(?:\+33[\s.-]?|0)[1-9](?:[\s.-]?\d{2}){4}(?!\d)/g,
+      refine: m => ({ start: m.index, length: m[0].length, kind: "replace", type: "TEL", value: m[0] }),
+    },
+    {
+      id: "D-06", // IBAN validé mod 97
+      pattern: /\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{2,4}){3,8}\b/g,
+      refine(m) {
+        const compact = m[0].replaceAll(" ", "");
+        if (!isValidIban(compact)) return null;
+        return { start: m.index, length: m[0].length, kind: "replace", type: "IBAN", value: compact };
+      },
+    },
+    {
+      id: "D-07", // NIR (sécurité sociale) avec clé validée
+      pattern: /\b[12]\s?\d{2}\s?\d{2}\s?(?:\d{2}|2[AB])\s?\d{3}\s?\d{3}\s?\d{2}\b/g,
+      refine(m) {
+        const compact = m[0].replaceAll(" ", "");
+        if (!hasValidNirKey(compact)) return null;
+        return { start: m.index, length: m[0].length, kind: "replace", type: "NIR", value: compact };
+      },
+    },
+    {
+      id: "D-08", // carte bancaire validée Luhn
+      pattern: /(?<![\d-])\d(?:[ -]?\d){12,18}(?![\d-])/g,
+      refine(m) {
+        const digits = m[0].replaceAll(" ", "").replaceAll("-", "");
+        if (digits.length < 13 || digits.length > 19 || !passesLuhn(digits)) return null;
+        return { start: m.index, length: m[0].length, kind: "replace", type: "CB", value: digits };
+      },
+    },
+    {
+      id: "D-09", // GUID — alerte seulement
+      pattern: /\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b/g,
+      refine: m => ({ start: m.index, length: m[0].length, kind: "alert", value: m[0] }),
+    },
+    {
+      id: "D-10", // secrets à préfixe connu — alerte seulement
+      pattern: /\b(?:sk|pk)-[A-Za-z0-9_-]{16,}\b|\bgh[pousr]_[A-Za-z0-9]{20,}\b|\bgithub_pat_[A-Za-z0-9_]{20,}\b|\bAKIA[0-9A-Z]{16}\b|\bxox[bpars]-[A-Za-z0-9-]{10,}\b|\bBearer\s+[A-Za-z0-9._~+/=-]{16,}/g,
+      refine: m => ({ start: m.index, length: m[0].length, kind: "alert", value: m[0] }),
+    },
+    {
+      id: "D-10", // secrets probables par entropie — alerte seulement
+      pattern: /(?<![A-Za-z0-9+/=_-])[A-Za-z0-9+/=_-]{20,}(?![A-Za-z0-9+/=_-])/g,
+      refine: m => looksLikeSecret(m[0])
+        ? { start: m.index, length: m[0].length, kind: "alert", value: m[0] }
+        : null,
+    },
+    {
+      id: "D-11", // URL interne — alerte seulement
+      pattern: /\bhttps?:\/\/[^\s"'<>()\]]+/gi,
+      refine: m => isWellKnownHost(extractHost(m[0]))
+        ? null
+        : { start: m.index, length: m[0].length, kind: "alert", value: m[0] },
+    },
+  ];
+
+  function tryAccept(acceptedBySegment, segmentIndex, detection, detectorId) {
+    let list = acceptedBySegment.get(segmentIndex);
+    if (!list) { list = []; acceptedBySegment.set(segmentIndex, list); }
+    const end = detection.start + detection.length;
+    for (const other of list) {
+      if (detection.start < other.start + other.length && other.start < end) return;
+    }
+    list.push({ ...detection, detectorId });
+  }
+
+  function autonomousPass(segments) {
+    const freeSegments = segments
+      .map((segment, index) => ({ index, segment }))
+      .filter(e => !e.segment.locked);
+    const acceptedBySegment = new Map();
+
+    for (const detector of DETECTORS) {
+      for (const { index, segment } of freeSegments) {
+        for (const m of segment.text.matchAll(detector.pattern)) {
+          const detection = detector.refine(m);
+          if (detection) tryAccept(acceptedBySegment, index, detection, detector.id);
+        }
+      }
+    }
+
+    // D-12 : chaque nom d'utilisateur relevé par D-01 est aussi remplacé
+    // partout où il apparaît isolé dans le texte (même jeton).
+    const userNames = new Map(); // minuscules → valeur canonique
+    for (const list of acceptedBySegment.values()) {
+      for (const a of list) {
+        if (a.detectorId === "D-01") userNames.set(a.value.toLowerCase(), a.value);
+      }
+    }
+    for (const name of userNames.values()) {
+      const pattern = new RegExp(`\\b${escapeRegex(name)}\\b`, "gi");
+      for (const { index, segment } of freeSegments) {
+        for (const m of segment.text.matchAll(pattern)) {
+          tryAccept(acceptedBySegment, index,
+            { start: m.index, length: m[0].length, kind: "replace", type: "USER", value: name }, "D-12");
+        }
+      }
+    }
+
+    // Jetons stables : même valeur ⇒ même jeton ; une seule valeur d'un type
+    // ⇒ XX_TYPE_XX, plusieurs ⇒ XX_TYPE_1_XX… par ordre d'apparition.
+    const valuesByType = new Map();
+    const orderedIndexes = [...acceptedBySegment.keys()].sort((a, b) => a - b);
+    for (const index of orderedIndexes) {
+      for (const a of acceptedBySegment.get(index).slice().sort((x, y) => x.start - y.start)) {
+        if (a.kind !== "replace") continue;
+        let values = valuesByType.get(a.type);
+        if (!values) { values = []; valuesByType.set(a.type, values); }
+        if (!values.includes(a.value.toUpperCase())) values.push(a.value.toUpperCase());
+      }
+    }
+    const tokenFor = (type, value) => {
+      const values = valuesByType.get(type);
+      return values.length === 1
+        ? `XX_${type}_XX`
+        : `XX_${type}_${values.indexOf(value.toUpperCase()) + 1}_XX`;
+    };
+
+    const next = [];
+    for (let i = 0; i < segments.length; i++) {
+      const edits = acceptedBySegment.get(i);
+      if (!edits || segments[i].locked) { next.push(segments[i]); continue; }
+      const resolved = edits
+        .slice().sort((a, b) => a.start - b.start)
+        .map(a => ({
+          start: a.start,
+          length: a.length,
+          replacement: a.kind === "replace" ? tokenFor(a.type, a.value) : null,
+          detectorId: a.detectorId,
+        }));
+      next.push(...splitSegment(segments[i], resolved));
+    }
+    return next;
+  }
+
+  // ----- Pipeline complet ----------------------------------------------------
+
+  function clean(text, rules) {
+    let segments = [freeSegment(String(text))];
+    segments = dictionaryPass(segments, rules || []);
+    segments = autonomousPass(segments);
+
+    let cleanText = "";
+    const spans = [];
+    let config = 0, auto = 0, alerts = 0;
+    for (const segment of segments) {
+      if (segment.locked) {
+        spans.push({
+          start: cleanText.length, length: segment.text.length,
+          kind: segment.kind, detectorId: segment.detectorId, original: segment.original,
+        });
+        if (segment.kind === "alert") alerts++;
+        else if (segment.detectorId === "config") config++;
+        else auto++;
+      }
+      cleanText += segment.text;
+    }
+    return {
+      cleanText, spans,
+      stats: { config, auto, alerts, total: config + auto },
+      warnings: [],
+    };
+  }
+
+  return { parseConfig, clean };
+})();
+/*ENGINE-END*/
+
+// ============================================================================
+// Interface — équivalent web de MainForm.
+// ============================================================================
+(() => {
+  const $ = id => document.getElementById(id);
+  const btnLoadConfig = $("btnLoadConfig"), fileInput = $("fileInput"),
+    btnHelp = $("btnHelp"), lblConfig = $("lblConfig"), chkRemember = $("chkRemember"),
+    txtInput = $("txtInput"), btnPaste = $("btnPaste"), btnClean = $("btnClean"),
+    btnCopy = $("btnCopy"), result = $("result"), status = $("status"),
+    helpDialog = $("helpDialog");
+
+  const STORAGE_KEY = "prompt-cleaner.config";
+  let rules = [];
+  let configText = null;
+  let configName = null;
+  let lastResult = null;
+
+  const setStatus = text => { status.textContent = text; };
+
+  // ----- Config --------------------------------------------------------------
+
+  function applyConfig(text, name, source) {
+    const report = PromptCleaner.parseConfig(text);
+    rules = report.rules;
+    configText = text;
+    configName = name;
+    let label = `${name} — ${report.rules.length} règle(s)`;
+    if (report.ignoredLineCount > 0) label += `, ${report.ignoredLineCount} ligne(s) ignorée(s)`;
+    if (report.duplicateKeywordCount > 0) label += `, ${report.duplicateKeywordCount} doublon(s)`;
+    lblConfig.textContent = label;
+    lblConfig.style.color = "#1a1a1a";
+    setStatus(source === "storage"
+      ? `Config « ${name} » restaurée depuis ce navigateur — ${report.rules.length} règle(s).`
+      : `Config chargée — ${report.rules.length} règle(s).`);
+    persistIfWanted();
+  }
+
+  function persistIfWanted() {
+    try {
+      if (chkRemember.checked && configText !== null) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ name: configName, text: configText }));
+      } else if (!chkRemember.checked) {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    } catch { /* stockage local indisponible (navigation privée…) : tant pis */ }
+  }
+
+  function loadConfigFile(file) {
+    const reader = new FileReader();
+    reader.onload = () => applyConfig(String(reader.result), file.name, "file");
+    reader.onerror = () => setStatus(`Impossible de lire « ${file.name} ».`);
+    reader.readAsText(file, "utf-8");
+  }
+
+  btnLoadConfig.addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", () => {
+    if (fileInput.files.length > 0) loadConfigFile(fileInput.files[0]);
+    fileInput.value = "";
+  });
+  chkRemember.addEventListener("change", persistIfWanted);
+
+  // Glisser-déposer du fichier .cfg n'importe où sur la page.
+  document.body.addEventListener("dragover", e => { e.preventDefault(); document.body.classList.add("dragover"); });
+  document.body.addEventListener("dragleave", () => document.body.classList.remove("dragover"));
+  document.body.addEventListener("drop", e => {
+    e.preventDefault();
+    document.body.classList.remove("dragover");
+    if (e.dataTransfer.files.length > 0) loadConfigFile(e.dataTransfer.files[0]);
+  });
+
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      chkRemember.checked = true;
+      const { name, text } = JSON.parse(saved);
+      applyConfig(text, name, "storage");
+    }
+  } catch { /* stockage corrompu ou indisponible : on démarre sans config */ }
+
+  // ----- Presse-papier ---------------------------------------------------------
+
+  async function copyToClipboard(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Repli pour les navigateurs qui refusent l'API sur les pages locales.
+      const helper = document.createElement("textarea");
+      helper.value = text;
+      document.body.appendChild(helper);
+      helper.select();
+      const ok = document.execCommand("copy");
+      helper.remove();
+      return ok;
+    }
+  }
+
+  btnPaste.addEventListener("click", async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        txtInput.value = text;
+        txtInput.dispatchEvent(new Event("input"));
+        setStatus("Texte collé depuis le presse-papier.");
+      } else {
+        setStatus("Le presse-papier ne contient pas de texte.");
+      }
+    } catch {
+      txtInput.focus();
+      setStatus("Ce navigateur ne permet pas de lire le presse-papier ici : utilisez Ctrl+V dans la zone de texte.");
+    }
+  });
+
+  // ----- Nettoyage --------------------------------------------------------------
+
+  txtInput.addEventListener("input", () => { btnClean.disabled = txtInput.value.length === 0; });
+
+  function renderResult(res) {
+    result.textContent = "";
+    let position = 0;
+    for (const span of res.spans) {
+      if (span.start > position) {
+        result.appendChild(document.createTextNode(res.cleanText.slice(position, span.start)));
+      }
+      const mark = document.createElement("span");
+      mark.className = span.kind;
+      mark.title = span.kind === "alert"
+        ? `${span.detectorId} : donnée suspecte, à vérifier`
+        : `${span.detectorId} : « ${span.original} »`;
+      mark.textContent = res.cleanText.slice(span.start, span.start + span.length);
+      result.appendChild(mark);
+      position = span.start + span.length;
+    }
+    if (position < res.cleanText.length) {
+      result.appendChild(document.createTextNode(res.cleanText.slice(position)));
+    }
+  }
+
+  function describe(stats) {
+    if (stats.total === 0 && stats.alerts === 0) return "Aucune donnée sensible détectée";
+    return `${stats.total} remplacement(s) (${stats.config} config, ${stats.auto} auto) — ${stats.alerts} alerte(s)`;
+  }
+
+  async function doClean() {
+    const input = txtInput.value;
+    if (!input) return;
+    const res = PromptCleaner.clean(input, rules);
+    lastResult = res;
+    renderResult(res);
+    btnCopy.disabled = res.cleanText.length === 0;
+    const copied = res.cleanText.length > 0 && await copyToClipboard(res.cleanText);
+    setStatus(`${describe(res.stats)} — ${copied ? "copié dans le presse-papier ✔" : "utilisez le bouton Copier"}`);
+  }
+
+  btnClean.addEventListener("click", doClean);
+  document.addEventListener("keydown", e => {
+    if (e.ctrlKey && e.key === "Enter" && !btnClean.disabled) { e.preventDefault(); doClean(); }
+  });
+
+  btnCopy.addEventListener("click", async () => {
+    if (lastResult && lastResult.cleanText.length > 0) {
+      const ok = await copyToClipboard(lastResult.cleanText);
+      setStatus(ok ? "Résultat recopié dans le presse-papier." : "La copie a été refusée par le navigateur.");
+    }
+  });
+
+  // ----- Aide ---------------------------------------------------------------------
+
+  btnHelp.addEventListener("click", () => helpDialog.showModal());
+  $("btnCloseHelp").addEventListener("click", () => helpDialog.close());
+  $("btnCopyExample").addEventListener("click", async e => {
+    if (await copyToClipboard($("helpExample").textContent)) {
+      e.target.textContent = "Exemple copié ✔";
+      e.target.disabled = true;
+    }
+  });
+})();
+</script>
+</body>
+</html>

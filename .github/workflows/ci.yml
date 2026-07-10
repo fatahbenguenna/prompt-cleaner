@@ -47,6 +47,19 @@ jobs:
           path: publish/prompt-cleaner.exe
           if-no-files-found: error
 
+  web:
+    name: Tests du portage web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Tests du moteur JavaScript (extrait de web/index.html)
+        run: node web/test.mjs
+
   release:
     name: Release GitHub (tags v*)
     if: startsWith(github.ref, 'refs/tags/v')

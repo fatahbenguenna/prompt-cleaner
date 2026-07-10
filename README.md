@@ -26,6 +26,10 @@ Récupérez `prompt-cleaner.exe` dans les [Releases GitHub](../../releases) (ou 
 
 Raccourcis clavier : `Alt+C` charger la config, `Alt+O` coller, `Alt+L` ou `Ctrl+Entrée` nettoyer, `Alt+P` copier.
 
+## Variante web (zéro exécutable)
+
+Si l'exécutable subit trop de friction antivirus/SmartScreen sur votre poste, la même application existe en **un seul fichier `web/index.html`** : téléchargez-le et double-cliquez — il s'ouvre dans votre navigateur, fonctionne 100 % hors-ligne (une CSP intégrée lui interdit tout appel réseau) et embarque le même moteur de nettoyage (dictionnaire + détecteurs D-01 à D-12). Le chargement de la config passe par le même explorateur de fichiers (ou un glisser-déposer), et une case « mémoriser dans ce navigateur » remplace l'auto-chargement du `.cfg`. Voir `docs/web-port.md` pour les détails et compromis.
+
 ## Technologie retenue
 
 **C# / .NET 8 WinForms**, publié en *self-contained single-file* (`win-x64`) : un unique `prompt-cleaner.exe` embarquant le runtime — double-clic sur tout Windows 10/11, y compris depuis une clé USB, sans droits administrateur. Hors-ligne par conception : aucun appel réseau, aucune écriture disque du texte traité. Le choix est argumenté (matrice de décision) dans `docs/architecture.md`.
