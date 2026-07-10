@@ -41,7 +41,7 @@ Garanties :
 | Bouton Coller | `clipboard.readText` si le navigateur l'autorise, sinon message invitant à Ctrl+V |
 | RichTextBox verte/rouge + légende | `<span class="replaced|alert">` (mêmes couleurs, contrastes AA conservés) + légende |
 | Barre d'état | pied de page de statut |
-| Popin « ? » format de config | `<dialog>` natif avec exemple copiable |
+| Popin « ? » format de config | `<dialog>` natif devenu **éditeur de règles intégré** : pré-rempli avec la config courante (ou l'exemple), compteur de règles en direct, « Utiliser ces règles » applique le contenu sans fichier, « Copier » permet d'en faire un `.cfg` |
 
 ## 4. Compromis assumés
 

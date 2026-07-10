@@ -58,12 +58,14 @@
   }
   dialog::backdrop { background: rgba(0,0,0,.35); }
   dialog h2 { margin-top: 0; font-size: 1.05rem; }
-  dialog pre {
+  #cfgEditor {
+    width: 100%; height: 220px; padding: 10px; resize: vertical;
     background: #f5f5f5; border: 1px solid var(--border); border-radius: 4px;
-    padding: 10px; font: .85rem/1.45 Consolas, monospace;
-    overflow-x: auto; white-space: pre;
+    font: .85rem/1.45 Consolas, monospace;
   }
+  #editorReport { font-size: .85rem; color: #555; margin-top: 4px; min-height: 1.2em; }
   dialog ul { font-size: .9rem; padding-left: 20px; }
+  #btnApplyRules { font-weight: 600; }
   .dialog-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
   body.dragover { outline: 3px dashed #7aa7d9; outline-offset: -6px; }
 </style>
@@ -115,27 +117,23 @@
 Astuce : vous pouvez aussi déposer votre fichier .cfg n'importe où sur la page.</footer>
 
 <dialog id="helpDialog">
-  <h2>Format du fichier de configuration</h2>
-  <p>Fichier texte (UTF-8), une règle par ligne au format « motclé : remplacement ».
-  Au nettoyage, chaque occurrence du motclé est remplacée par la valeur de droite.</p>
-  <pre id="helpExample"># Les lignes vides et celles commençant par # sont ignorées.
-# Une règle par ligne, au format : motclé : remplacement
-
-google : mon-entreprise
-fb44ja8k : nom-user
-myApp : nom-application
-
-# La casse des mots-clés est ignorée (Google = google = GOOGLE).
-# Seul le premier « : » sépare : la valeur peut en contenir.
-portail : https://intranet.exemple:8080/accueil</pre>
+  <h2>Règles de remplacement</h2>
+  <p>Une règle par ligne au format « motclé : remplacement » — chaque occurrence du motclé
+  (casse ignorée) sera remplacée par la valeur de droite. Modifiez les règles ci-dessous puis
+  cliquez sur <strong>Utiliser ces règles</strong> : aucun fichier n'est nécessaire.</p>
+  <textarea id="cfgEditor" spellcheck="false" aria-label="Éditeur des règles de remplacement"></textarea>
+  <div id="editorReport" role="status"></div>
   <ul>
-    <li>En cas de mot-clé en double, la dernière ligne gagne.</li>
-    <li>Les mots-clés les plus longs sont appliqués en premier.</li>
+    <li>Lignes vides et lignes commençant par <code>#</code> ignorées ; seul le premier « : » sépare.</li>
+    <li>Mot-clé en double : la dernière ligne gagne. Les mots-clés longs sont appliqués en premier.</li>
     <li>Cochez « mémoriser dans ce navigateur » pour retrouver vos règles à la prochaine visite
-    (stockage local uniquement, jamais envoyé en ligne).</li>
+    (stockage local uniquement, jamais envoyé en ligne). « Copier » permet d'enregistrer vos
+    règles dans un fichier <code>.cfg</code> réutilisable.</li>
   </ul>
   <div class="dialog-buttons">
-    <button id="btnCopyExample">Copier l'exemple</button>
+    <button id="btnResetExample">Rétablir l'exemple</button>
+    <button id="btnCopyRules">Copier</button>
+    <button id="btnApplyRules">Utiliser ces règles</button>
     <button id="btnCloseHelp">Fermer</button>
   </div>
 </dialog>
@@ -544,7 +542,9 @@ const PromptCleaner = (() => {
     lblConfig.style.color = "#1a1a1a";
     setStatus(source === "storage"
       ? `Config « ${name} » restaurée depuis ce navigateur — ${report.rules.length} règle(s).`
-      : `Config chargée — ${report.rules.length} règle(s).`);
+      : source === "editor"
+        ? `Règles de l'éditeur appliquées — ${report.rules.length} règle(s).`
+        : `Config chargée — ${report.rules.length} règle(s).`);
     persistIfWanted();
   }
 
@@ -677,16 +677,55 @@ const PromptCleaner = (() => {
     }
   });
 
-  // ----- Aide ---------------------------------------------------------------------
+  // ----- Éditeur de règles (popin « ? ») -------------------------------------------
 
-  btnHelp.addEventListener("click", () => helpDialog.showModal());
-  $("btnCloseHelp").addEventListener("click", () => helpDialog.close());
-  $("btnCopyExample").addEventListener("click", async e => {
-    if (await copyToClipboard($("helpExample").textContent)) {
-      e.target.textContent = "Exemple copié ✔";
-      e.target.disabled = true;
-    }
+  const cfgEditor = $("cfgEditor"), editorReport = $("editorReport");
+
+  const EXAMPLE_RULES = `# Les lignes vides et celles commençant par # sont ignorées.
+# Une règle par ligne, au format : motclé : remplacement
+
+google : mon-entreprise
+fb44ja8k : nom-user
+myApp : nom-application
+
+# La casse des mots-clés est ignorée (Google = google = GOOGLE).
+# Seul le premier « : » sépare : la valeur peut en contenir.
+portail : https://intranet.exemple:8080/accueil`;
+
+  function updateEditorReport() {
+    const report = PromptCleaner.parseConfig(cfgEditor.value);
+    let text = `${report.rules.length} règle(s)`;
+    if (report.ignoredLineCount > 0) text += ` · ${report.ignoredLineCount} ligne(s) ignorée(s)`;
+    if (report.duplicateKeywordCount > 0) text += ` · ${report.duplicateKeywordCount} doublon(s)`;
+    editorReport.textContent = text;
+  }
+
+  btnHelp.addEventListener("click", () => {
+    // La popin édite la config courante ; l'exemple ne sert que de modèle de départ.
+    cfgEditor.value = configText ?? EXAMPLE_RULES;
+    updateEditorReport();
+    helpDialog.showModal();
   });
+
+  cfgEditor.addEventListener("input", updateEditorReport);
+
+  $("btnResetExample").addEventListener("click", () => {
+    cfgEditor.value = EXAMPLE_RULES;
+    updateEditorReport();
+  });
+
+  $("btnCopyRules").addEventListener("click", async () => {
+    editorReport.textContent = (await copyToClipboard(cfgEditor.value))
+      ? "Règles copiées dans le presse-papier ✔ (à coller dans un fichier .cfg)"
+      : "La copie a été refusée par le navigateur.";
+  });
+
+  $("btnApplyRules").addEventListener("click", () => {
+    applyConfig(cfgEditor.value, "règles de l'éditeur", "editor");
+    helpDialog.close();
+  });
+
+  $("btnCloseHelp").addEventListener("click", () => helpDialog.close());
 })();
 </script>
 </body>

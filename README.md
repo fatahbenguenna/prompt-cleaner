@@ -28,7 +28,7 @@ Raccourcis clavier : `Alt+C` charger la config, `Alt+O` coller, `Alt+L` ou `Ctrl
 
 ## Variante web (zéro exécutable)
 
-Si l'exécutable subit trop de friction antivirus/SmartScreen sur votre poste, la même application existe en **un seul fichier `web/index.html`** : téléchargez-le et double-cliquez — il s'ouvre dans votre navigateur, fonctionne 100 % hors-ligne (une CSP intégrée lui interdit tout appel réseau) et embarque le même moteur de nettoyage (dictionnaire + détecteurs D-01 à D-12). Le chargement de la config passe par le même explorateur de fichiers (ou un glisser-déposer), et une case « mémoriser dans ce navigateur » remplace l'auto-chargement du `.cfg`. Voir `docs/web-port.md` pour les détails et compromis.
+Si l'exécutable subit trop de friction antivirus/SmartScreen sur votre poste, la même application existe en **un seul fichier `web/index.html`** : téléchargez-le et double-cliquez — il s'ouvre dans votre navigateur, fonctionne 100 % hors-ligne (une CSP intégrée lui interdit tout appel réseau) et embarque le même moteur de nettoyage (dictionnaire + détecteurs D-01 à D-12). Le chargement de la config passe par le même explorateur de fichiers (ou un glisser-déposer), et une case « mémoriser dans ce navigateur » remplace l'auto-chargement du `.cfg`. Le bouton « ? » ouvre un **éditeur de règles intégré** : définissez ou modifiez vos règles directement dans la page et appliquez-les sans passer par un fichier. Voir `docs/web-port.md` pour les détails et compromis.
 
 ## Technologie retenue
 
