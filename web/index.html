@@ -16,12 +16,28 @@
   * { box-sizing: border-box; }
   body {
     font-family: "Segoe UI", system-ui, sans-serif;
-    margin: 0 auto; padding: 16px; max-width: 1000px;
+    margin: 0 auto; padding: 16px; max-width: 1240px;
     background: #fafafa; color: #1a1a1a;
   }
   h1 { font-size: 1.3rem; margin: 0; }
   .tagline { margin: 2px 0 14px; color: #555; font-size: .85rem; }
   section { margin-bottom: 10px; }
+  .layout {
+    display: grid; grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 18px; align-items: start;
+  }
+  aside {
+    border: 1px solid var(--border); border-radius: 6px;
+    background: #fff; padding: 14px;
+  }
+  aside h2 { font-size: 1rem; margin: 0 0 8px; }
+  aside p { font-size: .85rem; color: #444; margin: 0 0 10px; }
+  aside .bar { margin-bottom: 8px; }
+  #lblConfig { display: block; margin: 6px 0 8px; }
+  .hint { font-size: .8rem; color: #777; margin: 10px 0 0; }
+  @media (max-width: 920px) {
+    .layout { grid-template-columns: 1fr; }
+  }
   .bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .bar .spacer { flex: 1; }
   button {
@@ -78,43 +94,55 @@
   100 % hors-ligne : rien ne quitte ce navigateur.</p>
 </header>
 
-<section class="bar">
-  <button id="btnLoadConfig">Charger config…</button>
-  <input type="file" id="fileInput" accept=".cfg,.txt,text/plain" hidden>
-  <button id="btnHelp" aria-label="Aide sur le format du fichier de configuration" title="Format du fichier de configuration">?</button>
+<div class="layout">
+
+<main>
+  <section>
+    <div class="bar">
+      <label class="head" for="txtInput">Texte d'entrée</label>
+      <span class="spacer"></span>
+      <button id="btnPaste">Coller</button>
+    </div>
+    <textarea id="txtInput" spellcheck="false" placeholder="Collez votre texte ici (Ctrl+V)…"></textarea>
+  </section>
+
+  <div class="clean-row"><button id="btnClean" disabled>🧹 Clean</button></div>
+
+  <section>
+    <div class="bar">
+      <label class="head">Résultat (copié automatiquement dans le presse-papier)</label>
+      <span class="spacer"></span>
+      <button id="btnCopy" disabled>Copier</button>
+    </div>
+    <div id="result" tabindex="0" aria-label="Résultat nettoyé"></div>
+    <div class="legend">Légende :
+      <span class="chip replaced">remplacé</span>
+      <span class="chip alert">suspect non remplacé (à vérifier)</span>
+    </div>
+  </section>
+
+  <footer id="status">Prêt — collez votre texte puis cliquez sur Clean :
+la détection automatique fonctionne sans aucune configuration.</footer>
+</main>
+
+<aside aria-label="Affiner l'anonymisation">
+  <h2>Affiner l'anonymisation</h2>
+  <p>Le nettoyage automatique détecte déjà chemins Windows, e-mails, adresses IP,
+  téléphones, IBAN, cartes bancaires… <strong>Vous pouvez aussi améliorer la précision</strong>
+  en chargeant un fichier de règles, ou en éditant le modèle via le point d'interrogation.</p>
+  <div class="bar">
+    <button id="btnLoadConfig">Charger config…</button>
+    <input type="file" id="fileInput" accept=".cfg,.txt,text/plain" hidden>
+    <button id="btnHelp" aria-label="Éditer les règles de remplacement" title="Éditer les règles de remplacement">?</button>
+  </div>
   <span id="lblConfig">Aucune config chargée</span>
-  <span class="spacer"></span>
   <label class="remember" title="Conserve les règles dans le stockage local de ce navigateur, jamais en ligne">
     <input type="checkbox" id="chkRemember"> mémoriser dans ce navigateur
   </label>
-</section>
+  <p class="hint">Astuce : vous pouvez aussi déposer votre fichier .cfg n'importe où sur la page.</p>
+</aside>
 
-<section>
-  <div class="bar">
-    <label class="head" for="txtInput">Texte d'entrée</label>
-    <span class="spacer"></span>
-    <button id="btnPaste">Coller</button>
-  </div>
-  <textarea id="txtInput" spellcheck="false" placeholder="Collez votre texte ici (Ctrl+V)…"></textarea>
-</section>
-
-<div class="clean-row"><button id="btnClean" disabled>🧹 Clean</button></div>
-
-<section>
-  <div class="bar">
-    <label class="head">Résultat (copié automatiquement dans le presse-papier)</label>
-    <span class="spacer"></span>
-    <button id="btnCopy" disabled>Copier</button>
-  </div>
-  <div id="result" tabindex="0" aria-label="Résultat nettoyé"></div>
-  <div class="legend">Légende :
-    <span class="chip replaced">remplacé</span>
-    <span class="chip alert">suspect non remplacé (à vérifier)</span>
-  </div>
-</section>
-
-<footer id="status">Prêt — chargez un fichier de configuration puis collez votre texte.
-Astuce : vous pouvez aussi déposer votre fichier .cfg n'importe où sur la page.</footer>
+</div>
 
 <dialog id="helpDialog">
   <h2>Règles de remplacement</h2>
