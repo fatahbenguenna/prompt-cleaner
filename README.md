@@ -6,6 +6,8 @@ Application Windows fenêtrée **100 % portable** (un seul `.exe`, aucune instal
 
 Récupérez `prompt-cleaner.exe` dans les [Releases GitHub](../../releases) (ou dans les artefacts de CI de n'importe quel run). Aucune installation, aucun droit administrateur, aucun runtime requis : posez le fichier où vous voulez (clé USB comprise) et double-cliquez. Windows 10/11 x64.
 
+> **Premier lancement lent ?** C'est attendu pour un exécutable autonome de ~65 Mo téléchargé d'Internet : Windows le marque (« Mark of the Web »), SmartScreen interroge sa réputation en ligne et l'antivirus scanne l'intégralité du fichier ; l'application extrait aussi ses bibliothèques natives dans `%TEMP%` la première fois. Les lancements suivants sont bien plus rapides. Pour accélérer : clic droit → *Propriétés* → cochez **Débloquer** (ou `Unblock-File prompt-cleaner.exe` en PowerShell). L'exécutable n'étant pas signé numériquement, ces vérifications sont plus longues que pour un logiciel signé.
+
 ## Fonctionnement en bref
 
 1. **Charger config…** : sélection via l'explorateur Windows d'un fichier de règles `motclé : remplacement` :
@@ -56,7 +58,7 @@ dotnet test           # exécute les tests unitaires du moteur
 # Produit l'exécutable portable unique (publish/prompt-cleaner.exe) :
 dotnet publish src/PromptCleaner.App -c Release -r win-x64 --self-contained true \
   -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true \
-  -p:IncludeNativeLibrariesForSelfExtract=true -o publish
+  -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishReadyToRun=true -o publish
 ```
 
 La CI GitHub Actions (`.github/workflows/ci.yml`) rejoue build + tests + publication à chaque push et attache l'exécutable en artefact ; un tag `v*` crée une Release GitHub avec l'exe en pièce jointe.
