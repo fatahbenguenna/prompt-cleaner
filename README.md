@@ -14,6 +14,7 @@ Récupérez `prompt-cleaner.exe` dans les [Releases GitHub](../../releases) (ou 
    fb44ja8k : nom-user
    myApp : nom-application
    ```
+   Le bouton « ? » à côté de « Charger config… » rappelle ce format dans l'application, avec un exemple copiable.
 2. L'utilisateur colle son texte et clique sur **Clean**.
 3. **Passe 1** : remplacement de toutes les occurrences des mots-clés du dictionnaire.
 4. **Passe 2 (autonome)** : détection résiduelle — chemins `C:\Users\<nom>` (→ `XX_USER_XX`), e-mails, IP, téléphones, IBAN, cartes bancaires… remplacés ; GUID, secrets probables et URLs internes signalés en alerte.

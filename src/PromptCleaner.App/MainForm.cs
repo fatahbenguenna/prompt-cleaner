@@ -15,6 +15,7 @@ public sealed class MainForm : Form
     private const string AutoConfigFileName = "prompt-cleaner.cfg";
 
     private readonly Button _btnLoadConfig;
+    private readonly Button _btnConfigHelp;
     private readonly Label _lblConfig;
     private readonly Button _btnPaste;
     private readonly TextBox _txtInput;
@@ -37,6 +38,13 @@ public sealed class MainForm : Form
         var textFont = new Font("Consolas", 10f);
 
         _btnLoadConfig = new Button { Text = "Charger &config…", AutoSize = true };
+        _btnConfigHelp = new Button
+        {
+            Text = "?",
+            AutoSize = true,
+            Font = new Font(Font, FontStyle.Bold),
+            AccessibleName = "Aide sur le format du fichier de configuration",
+        };
         _lblConfig = new Label
         {
             Text = "Aucune config chargée",
@@ -95,6 +103,7 @@ public sealed class MainForm : Form
         Controls.Add(statusStrip);
 
         _btnLoadConfig.Click += OnLoadConfigClicked;
+        _btnConfigHelp.Click += OnConfigHelpClicked;
         _btnPaste.Click += OnPasteClicked;
         _btnClean.Click += OnCleanClicked;
         _btnCopy.Click += OnCopyClicked;
@@ -143,6 +152,7 @@ public sealed class MainForm : Form
             WrapContents = false,
         };
         configBar.Controls.Add(_btnLoadConfig);
+        configBar.Controls.Add(_btnConfigHelp);
         _lblConfig.Margin = new Padding(8, 8, 0, 0);
         configBar.Controls.Add(_lblConfig);
         root.Controls.Add(configBar, 0, 0);
@@ -221,6 +231,12 @@ public sealed class MainForm : Form
             e.SuppressKeyPress = true;
             _btnClean.PerformClick();
         }
+    }
+
+    private void OnConfigHelpClicked(object? sender, EventArgs e)
+    {
+        using var dialog = new ConfigHelpDialog();
+        dialog.ShowDialog(this);
     }
 
     private void OnLoadConfigClicked(object? sender, EventArgs e)
