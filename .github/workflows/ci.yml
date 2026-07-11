@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build, tests et publication portable
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Tests
+        run: dotnet test --no-build --configuration Release
+
+      - name: Publication (exe unique auto-suffisant)
+        run: >
+          dotnet publish src/PromptCleaner.App
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:EnableCompressionInSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:PublishReadyToRun=true
+          --output publish
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prompt-cleaner-win-x64
+          path: publish/prompt-cleaner.exe
+          if-no-files-found: error
+
+  release:
+    name: Release GitHub (tags v*)
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: prompt-cleaner-win-x64
+
+      - name: Créer la release avec l'exe en pièce jointe
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Si la release existe déjà (tag créé depuis l'interface GitHub),
+        # on se contente d'y attacher l'exécutable.
+        run: >
+          gh release create "${{ github.ref_name }}" prompt-cleaner.exe
+          --repo "${{ github.repository }}"
+          --title "prompt-cleaner ${{ github.ref_name }}"
+          --generate-notes
+          || gh release upload "${{ github.ref_name }}" prompt-cleaner.exe
+          --repo "${{ github.repository }}" --clobber
