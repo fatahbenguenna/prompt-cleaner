@@ -1,0 +1,997 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- CSP verrouillée : ce fichier ne peut par construction contacter aucun
+     serveur — tout reste dans le navigateur (équivalent web de NFR-3). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'">
+<title>prompt-cleaner</title>
+<style>
+  :root {
+    --replaced-back: #c8f7c5; --replaced-fore: #1b5e20;   /* AA : 6,58:1 */
+    --alert-back: #f7c5c5;    --alert-fore: #8b1a1a;      /* AA : 6,08:1 */
+    --border: #c9c9c9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", system-ui, sans-serif;
+    margin: 0 auto; padding: 16px; max-width: 1240px;
+    background: #fafafa; color: #1a1a1a;
+  }
+  h1 { font-size: 1.3rem; margin: 0; }
+  .tagline { margin: 2px 0 14px; color: #555; font-size: .85rem; }
+  section { margin-bottom: 10px; }
+
+  /* Bandeau graphique « scan d'anonymisation » — SVG inline, aucune image externe. */
+  .banner {
+    position: relative; margin-bottom: 16px;
+    border-radius: 8px; overflow: hidden;
+    border: 1px solid #0d2436;
+  }
+  .banner-art { display: block; width: 100%; height: 132px; }
+  .banner-art .bits text { fill: #37d67a; opacity: .22; }
+  .banner-art .bits .tok { fill: #8ef7b4; opacity: .95; }
+  /* Le scan ne se joue qu'au moment du nettoyage (classe .processing). */
+  .banner-art .scanline { opacity: 0; }
+  body.processing .banner-art .scanline { opacity: 1; animation: banner-sweep .85s linear; }
+  @keyframes banner-sweep {
+    from { transform: translateX(0); }
+    to   { transform: translateX(1340px); }
+  }
+  .banner-text {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 0 22px; color: #fff;
+    text-shadow: 0 1px 6px rgba(0,0,0,.55);
+    pointer-events: none;
+  }
+  .banner-text h1 { font-size: 1.55rem; }
+  .banner-text .tagline { color: #d7f5e4; margin: 4px 0 0; font-size: .9rem; }
+  @media (prefers-reduced-motion: reduce) {
+    body.processing .banner-art .scanline { animation: none; opacity: 0; }
+  }
+  .layout {
+    display: grid; grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 18px; align-items: start;
+  }
+  aside {
+    border: 1px solid var(--border); border-radius: 6px;
+    background: #fff; padding: 14px;
+  }
+  aside h2 { font-size: 1rem; margin: 0 0 8px; }
+  aside p { font-size: .85rem; color: #444; margin: 0 0 10px; }
+  aside .bar { margin-bottom: 8px; }
+  #lblConfig { display: block; margin: 6px 0 8px; }
+  .hint { font-size: .8rem; color: #777; margin: 10px 0 0; }
+  @media (max-width: 920px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+  .bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .bar .spacer { flex: 1; }
+  button {
+    font: inherit; padding: 5px 14px; cursor: pointer;
+    background: #fff; border: 1px solid var(--border); border-radius: 4px;
+  }
+  button:hover:not(:disabled) { background: #f0f0f0; }
+  button:disabled { opacity: .5; cursor: default; }
+  #btnHelp { font-weight: 700; padding: 5px 11px; }
+  label.head { font-weight: 600; }
+  #lblConfig { color: #666; font-size: .9rem; }
+  .remember { font-size: .85rem; color: #555; user-select: none; }
+  /* Les deux zones occupent ~70 % de la hauteur de la fenêtre (35 vh chacune). */
+  textarea, #result {
+    width: 100%; height: 35vh; min-height: 150px; padding: 8px;
+    font: .9rem/1.4 Consolas, monospace;
+    border: 1px solid var(--border); border-radius: 4px; background: #fff;
+  }
+  textarea { resize: vertical; }
+  #result { overflow: auto; white-space: pre-wrap; word-break: break-word; }
+  #result:empty::before { content: "Le résultat s'affichera ici."; color: #999; }
+  .replaced { background: var(--replaced-back); color: var(--replaced-fore); border-radius: 2px; }
+  .alert { background: var(--alert-back); color: var(--alert-fore); border-radius: 2px; }
+  .legend { margin-top: 6px; font-size: .85rem; }
+  .chip { padding: 2px 8px; border-radius: 3px; margin-left: 4px; }
+  #status {
+    margin-top: 14px; padding: 8px 10px; font-size: .85rem;
+    background: #efefef; border: 1px solid var(--border); border-radius: 4px;
+  }
+  dialog {
+    border: 1px solid var(--border); border-radius: 6px; padding: 18px;
+    max-width: 640px; width: calc(100vw - 40px);
+  }
+  dialog::backdrop { background: rgba(0,0,0,.35); }
+  dialog h2 { margin-top: 0; font-size: 1.05rem; }
+  #cfgEditor {
+    width: 100%; height: 220px; padding: 10px; resize: vertical;
+    background: #f5f5f5; border: 1px solid var(--border); border-radius: 4px;
+    font: .85rem/1.45 Consolas, monospace;
+  }
+  #editorReport { font-size: .85rem; color: #555; margin-top: 4px; min-height: 1.2em; }
+  dialog ul { font-size: .9rem; padding-left: 20px; }
+  #btnApplyRules { font-weight: 600; }
+  #historyList { max-height: 52vh; overflow-y: auto; margin: 6px 0; }
+  .hist-item {
+    border: 1px solid var(--border); border-radius: 5px;
+    padding: 8px 10px; margin-bottom: 8px;
+  }
+  .hist-meta { font-size: .78rem; color: #555; }
+  .hist-preview {
+    font: .82rem/1.35 Consolas, monospace; color: #222; margin: 5px 0 7px;
+    white-space: pre-wrap; word-break: break-word; max-height: 3.6em; overflow: hidden;
+  }
+  .hist-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .hist-actions button { padding: 3px 10px; font-size: .82rem; }
+  .hist-empty { color: #777; font-size: .9rem; }
+  .dialog-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+  body.dragover { outline: 3px dashed #7aa7d9; outline-offset: -6px; }
+</style>
+</head>
+<body>
+
+<header class="banner">
+  <svg class="banner-art" viewBox="0 0 1200 132" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#0b1f1a"/>
+        <stop offset="1" stop-color="#0d2436"/>
+      </linearGradient>
+      <linearGradient id="scan" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#37d67a" stop-opacity="0"/>
+        <stop offset="0.5" stop-color="#8ef7b4" stop-opacity="0.85"/>
+        <stop offset="1" stop-color="#37d67a" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <rect width="1200" height="132" fill="url(#bg)"/>
+    <g class="bits" font-family="Consolas, monospace" font-size="17" font-weight="700">
+      <text y="22">0100101 11 0 10110 01 1001 0 11010 010 1 0011 10 100 1 01101 0 110 01 0010 1 1010 011 0 1101 00 1</text>
+      <text y="46">1 0011 0 <tspan class="tok">XX_USER_XX</tspan> 10 1 001 11 0100 1 0110 0 1 10010 1 0011 010 1 1001 0 1101 0 010 1</text>
+      <text y="70">01 100 1 0010 11 010 0 1101 1 00 1010 0 <tspan class="tok">XX_EMAIL_XX</tspan> 1 0110 0 101 1 0010 1 1001 0</text>
+      <text y="94">1 0110 0 1001 1 010 01 <tspan class="tok">XX_IP_XX</tspan> 10 1 0011 0 110 1 0100 1 01101 0 1 0010 11 010 1 10</text>
+      <text y="118">0010 1 1010 0 110 01 0011 1 0100 1 0110 0 1 1001 01 0 1101 0 010 1 1000 1 0101 1 0011 0 1101 001 1</text>
+    </g>
+    <rect class="scanline" x="-140" y="0" width="140" height="132" fill="url(#scan)"/>
+  </svg>
+  <div class="banner-text">
+    <h1>🧹 prompt-cleaner</h1>
+    <p class="tagline">Nettoie un texte de ses données personnelles avant de le partager —
+    100 % hors-ligne : rien ne quitte ce navigateur.</p>
+  </div>
+</header>
+
+<div class="layout">
+
+<main>
+  <section>
+    <div class="bar">
+      <label class="head" for="txtInput">Texte d'entrée</label>
+      <span class="spacer"></span>
+      <button id="btnPaste">Coller</button>
+    </div>
+    <textarea id="txtInput" spellcheck="false" placeholder="Collez votre texte ici (Ctrl+V) : le nettoyage est automatique…"></textarea>
+  </section>
+
+  <section>
+    <div class="bar">
+      <label class="head">Résultat — nettoyage et copie automatiques</label>
+      <span class="spacer"></span>
+      <button id="btnHistory" disabled>Historique</button>
+      <button id="btnCopy" disabled>Copier</button>
+    </div>
+    <div id="result" tabindex="0" aria-label="Résultat nettoyé"></div>
+    <div class="legend">Légende :
+      <span class="chip replaced">remplacé</span>
+      <span class="chip alert">suspect non remplacé (à vérifier)</span>
+    </div>
+  </section>
+
+  <footer id="status">Prêt — collez votre texte puis cliquez sur Clean :
+la détection automatique fonctionne sans aucune configuration.</footer>
+</main>
+
+<aside aria-label="Affiner l'anonymisation">
+  <h2>Affiner l'anonymisation</h2>
+  <p>Le nettoyage automatique détecte déjà chemins Windows, e-mails, adresses IP,
+  téléphones, IBAN, cartes bancaires… <strong>Vous pouvez aussi améliorer la précision</strong>
+  en chargeant un fichier de règles, ou en éditant le modèle via le point d'interrogation.</p>
+  <div class="bar">
+    <button id="btnLoadConfig">Charger config…</button>
+    <input type="file" id="fileInput" accept=".cfg,.txt,text/plain" hidden>
+    <button id="btnHelp" aria-label="Éditer les règles de remplacement" title="Éditer les règles de remplacement">?</button>
+  </div>
+  <span id="lblConfig">Aucune config chargée</span>
+  <label class="remember" title="Conserve les règles dans le stockage local de ce navigateur, jamais en ligne">
+    <input type="checkbox" id="chkRemember"> mémoriser dans ce navigateur
+  </label>
+  <p class="hint">Astuce : vous pouvez aussi déposer votre fichier .cfg n'importe où sur la page.</p>
+</aside>
+
+</div>
+
+<dialog id="helpDialog">
+  <h2>Règles de remplacement</h2>
+  <p>Une règle par ligne au format « motclé : remplacement » — chaque occurrence du motclé
+  (casse ignorée) sera remplacée par la valeur de droite. Modifiez les règles ci-dessous puis
+  cliquez sur <strong>Utiliser ces règles</strong> : aucun fichier n'est nécessaire.</p>
+  <textarea id="cfgEditor" spellcheck="false" aria-label="Éditeur des règles de remplacement"></textarea>
+  <div id="editorReport" role="status"></div>
+  <ul>
+    <li>Lignes vides et lignes commençant par <code>#</code> ignorées ; seul le premier « : » sépare.</li>
+    <li>Mot-clé en double : la dernière ligne gagne. Les mots-clés longs sont appliqués en premier.</li>
+    <li>Cochez « mémoriser dans ce navigateur » pour retrouver vos règles à la prochaine visite
+    (stockage local uniquement, jamais envoyé en ligne). « Copier » permet d'enregistrer vos
+    règles dans un fichier <code>.cfg</code> réutilisable.</li>
+  </ul>
+  <div class="dialog-buttons">
+    <button id="btnResetExample">Rétablir l'exemple</button>
+    <button id="btnCopyRules">Copier</button>
+    <button id="btnApplyRules">Utiliser ces règles</button>
+    <button id="btnCloseHelp">Fermer</button>
+  </div>
+</dialog>
+
+<dialog id="historyDialog">
+  <h2>Historique de la session</h2>
+  <p>Chaque nettoyage est mémorisé le temps de la session — rien n'est écrit sur le disque,
+  tout disparaît à la fermeture ou au rechargement de la page. Rechargez un traitement pour
+  retrouver son texte d'entrée, ses règles et son résultat.</p>
+  <div id="historyList"></div>
+  <div class="dialog-buttons">
+    <button id="btnClearHistory">Vider l'historique</button>
+    <button id="btnCloseHistory">Fermer</button>
+  </div>
+</dialog>
+
+<script>
+"use strict";
+/*ENGINE-START*/
+// ============================================================================
+// Moteur de nettoyage — portage JavaScript de PromptCleaner.Core (C#).
+// Mêmes règles : passe 1 dictionnaire (mots-clés longs d'abord, casse
+// ignorée, pas de remplacement en cascade), passe 2 détecteurs D-01 → D-12
+// (jetons stables XX_TYPE_XX, chevauchements arbitrés par ordre de détecteur).
+// ============================================================================
+const PromptCleaner = (() => {
+
+  // ----- Fichier de configuration ------------------------------------------
+
+  function parseConfig(content) {
+    content = String(content).replace(/^\uFEFF/, "");
+    const rules = [];
+    const indexByKeyword = new Map();
+    let ignoredLineCount = 0;
+    let duplicateKeywordCount = 0;
+
+    for (const rawLine of content.split("\n")) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith("#")) continue;
+
+      // Seul le premier « : » sépare : la valeur peut en contenir.
+      const separator = line.indexOf(":");
+      if (separator < 0) { ignoredLineCount++; continue; }
+      const keyword = line.slice(0, separator).trim();
+      const replacement = line.slice(separator + 1).trim();
+      if (!keyword || !replacement) { ignoredLineCount++; continue; }
+
+      const key = keyword.toLowerCase();
+      if (indexByKeyword.has(key)) {
+        duplicateKeywordCount++;
+        rules[indexByKeyword.get(key)] = { keyword, replacement };
+      } else {
+        indexByKeyword.set(key, rules.length);
+        rules.push({ keyword, replacement });
+      }
+    }
+    return { rules, ignoredLineCount, duplicateKeywordCount };
+  }
+
+  // ----- Texte segmenté ------------------------------------------------------
+  // Un segment verrouillé (remplacé ou alerté) n'est plus jamais re-analysé.
+
+  const freeSegment = text => ({ text, locked: false });
+  const escapeRegex = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+  // Applique à un segment libre des édits triés et sans chevauchement.
+  // replacement === null ⇒ alerte (texte conservé, marqué).
+  function splitSegment(segment, edits) {
+    const out = [];
+    let position = 0;
+    for (const e of edits) {
+      if (e.start > position) out.push(freeSegment(segment.text.slice(position, e.start)));
+      const original = segment.text.slice(e.start, e.start + e.length);
+      out.push({
+        text: e.replacement === null ? original : e.replacement,
+        locked: true,
+        kind: e.replacement === null ? "alert" : "replaced",
+        detectorId: e.detectorId,
+        original,
+      });
+      position = e.start + e.length;
+    }
+    if (position < segment.text.length) out.push(freeSegment(segment.text.slice(position)));
+    return out;
+  }
+
+  // ----- Passe 1 : dictionnaire ---------------------------------------------
+
+  function dictionaryPass(segments, rules) {
+    const ordered = rules
+      .filter(r => r.keyword.length > 0)
+      .slice()
+      .sort((a, b) => b.keyword.length - a.keyword.length
+        || a.keyword.toLowerCase().localeCompare(b.keyword.toLowerCase()));
+
+    for (const rule of ordered) {
+      const pattern = new RegExp(escapeRegex(rule.keyword), "gi");
+      const next = [];
+      for (const segment of segments) {
+        if (segment.locked) { next.push(segment); continue; }
+        const edits = [];
+        for (const m of segment.text.matchAll(pattern)) {
+          edits.push({ start: m.index, length: m[0].length, replacement: rule.replacement, detectorId: "config" });
+        }
+        next.push(...(edits.length ? splitSegment(segment, edits) : [segment]));
+      }
+      segments = next;
+    }
+    return segments;
+  }
+
+  // ----- Passe 2 : détecteurs autonomes -------------------------------------
+
+  const GENERIC_PROFILES = new Set(["public", "default", "default user", "all users"]);
+  const WELL_KNOWN_DOMAINS = [
+    "github.com", "gitlab.com", "bitbucket.org",
+    "stackoverflow.com", "stackexchange.com",
+    "google.com", "microsoft.com", "apple.com", "mozilla.org",
+    "wikipedia.org", "developer.mozilla.org",
+    "nuget.org", "npmjs.com", "pypi.org", "apache.org",
+    "example.com", "example.org", "example.net", "localhost",
+  ];
+
+  function isValidIban(iban) {
+    if (iban.length < 15 || iban.length > 34) return false;
+    // Contrôle mod 97 (ISO 7064) : les 4 premiers caractères passent en queue.
+    const rearranged = iban.slice(4) + iban.slice(0, 4);
+    let mod = 0;
+    for (const c of rearranged) {
+      if (c >= "0" && c <= "9") mod = (mod * 10 + (c.charCodeAt(0) - 48)) % 97;
+      else if (c >= "A" && c <= "Z") mod = (mod * 100 + (c.charCodeAt(0) - 55)) % 97;
+      else return false;
+    }
+    return mod === 1;
+  }
+
+  function hasValidNirKey(nir) {
+    if (nir.length !== 15) return false;
+    // Corse : 2A vaut 19 et 2B vaut 18 dans le calcul de la clé.
+    const number = nir.slice(0, 13).replace(/2A/i, "19").replace(/2B/i, "18");
+    if (!/^\d{13}$/.test(number)) return false;
+    return Number(nir.slice(13)) === 97 - Number(number) % 97;
+  }
+
+  function passesLuhn(digits) {
+    let sum = 0, doubleIt = false;
+    for (let i = digits.length - 1; i >= 0; i--) {
+      let d = digits.charCodeAt(i) - 48;
+      if (doubleIt) { d *= 2; if (d > 9) d -= 9; }
+      sum += d;
+      doubleIt = !doubleIt;
+    }
+    return sum % 10 === 0;
+  }
+
+  function shannonEntropy(value) {
+    const counts = new Map();
+    for (const c of value) counts.set(c, (counts.get(c) || 0) + 1);
+    let entropy = 0;
+    for (const count of counts.values()) {
+      const p = count / value.length;
+      entropy -= p * Math.log2(p);
+    }
+    return entropy;
+  }
+
+  // Majuscules + minuscules + chiffres : écarte les hash hexadécimaux purs.
+  function looksLikeSecret(candidate) {
+    return /[A-Z]/.test(candidate) && /[a-z]/.test(candidate) && /\d/.test(candidate)
+      && shannonEntropy(candidate) >= 3.8;
+  }
+
+  function extractHost(url) {
+    const start = url.indexOf("://") + 3;
+    const end = url.slice(start).search(/[/:?#]/);
+    const host = (end < 0 ? url.slice(start) : url.slice(start, start + end)).replace(/\.+$/, "");
+    return host.toLowerCase();
+  }
+
+  const isWellKnownHost = host =>
+    WELL_KNOWN_DOMAINS.some(d => host === d || host.endsWith("." + d));
+
+  // Chaque détecteur émet {start, length, kind, type, value} ou null.
+  const DETECTORS = [
+    {
+      id: "D-01", // nom d'utilisateur dans un chemin Windows
+      pattern: /(?<=[A-Za-z]:\\(?:Users|Documents and Settings)\\)(?:[^\\/:*?"<>|\r\n]+(?=\\)|[^\\/:*?"<>|\s.,;!?)»«"']+)/gi,
+      refine(m) {
+        // Un compte Windows ne peut pas finir par un espace ou un point.
+        const name = m[0].replace(/[ .]+$/, "");
+        if (!name || GENERIC_PROFILES.has(name.toLowerCase())) return null;
+        return { start: m.index, length: name.length, kind: "replace", type: "USER", value: name };
+      },
+    },
+    {
+      id: "D-02", // serveur dans un chemin UNC
+      pattern: /(?<=\\\\)[A-Za-z0-9][A-Za-z0-9._-]{0,62}(?=\\)/g,
+      refine(m) {
+        if (m[0].toLowerCase() === "localhost") return null;
+        return { start: m.index, length: m[0].length, kind: "replace", type: "HOST", value: m[0] };
+      },
+    },
+    {
+      id: "D-03", // e-mail
+      pattern: /(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g,
+      refine: m => ({ start: m.index, length: m[0].length, kind: "replace", type: "EMAIL", value: m[0] }),
+    },
+    {
+      id: "D-04", // IPv4 hors localhost et plages de documentation (RFC 5737)
+      pattern: /(?<![\d.])(?:(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)(?!\.?\d)/g,
+      refine(m) {
+        const ip = m[0];
+        if (ip.startsWith("127.") || ip === "0.0.0.0" || ip === "255.255.255.255"
+          || ip.startsWith("192.0.2.") || ip.startsWith("198.51.100.") || ip.startsWith("203.0.113.")) return null;
+        return { start: m.index, length: ip.length, kind: "replace", type: "IP", value: ip };
+      },
+    },
+    {
+      id: "D-05", // téléphone français
+      pattern: /(?<!\d)(?:\+33[\s.-]?|0)[1-9](?:[\s.-]?\d{2}){4}(?!\d)/g,
+      refine: m => ({ start: m.index, length: m[0].length, kind: "replace", type: "TEL", value: m[0] }),
+    },
+    {
+      id: "D-06", // IBAN validé mod 97
+      pattern: /\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{2,4}){3,8}\b/g,
+      refine(m) {
+        const compact = m[0].replaceAll(" ", "");
+        if (!isValidIban(compact)) return null;
+        return { start: m.index, length: m[0].length, kind: "replace", type: "IBAN", value: compact };
+      },
+    },
+    {
+      id: "D-07", // NIR (sécurité sociale) avec clé validée
+      pattern: /\b[12]\s?\d{2}\s?\d{2}\s?(?:\d{2}|2[AB])\s?\d{3}\s?\d{3}\s?\d{2}\b/g,
+      refine(m) {
+        const compact = m[0].replaceAll(" ", "");
+        if (!hasValidNirKey(compact)) return null;
+        return { start: m.index, length: m[0].length, kind: "replace", type: "NIR", value: compact };
+      },
+    },
+    {
+      id: "D-08", // carte bancaire validée Luhn
+      pattern: /(?<![\d-])\d(?:[ -]?\d){12,18}(?![\d-])/g,
+      refine(m) {
+        const digits = m[0].replaceAll(" ", "").replaceAll("-", "");
+        if (digits.length < 13 || digits.length > 19 || !passesLuhn(digits)) return null;
+        return { start: m.index, length: m[0].length, kind: "replace", type: "CB", value: digits };
+      },
+    },
+    {
+      id: "D-09", // GUID — alerte seulement
+      pattern: /\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b/g,
+      refine: m => ({ start: m.index, length: m[0].length, kind: "alert", value: m[0] }),
+    },
+    {
+      id: "D-10", // secrets à préfixe connu — alerte seulement
+      pattern: /\b(?:sk|pk)-[A-Za-z0-9_-]{16,}\b|\bgh[pousr]_[A-Za-z0-9]{20,}\b|\bgithub_pat_[A-Za-z0-9_]{20,}\b|\bAKIA[0-9A-Z]{16}\b|\bxox[bpars]-[A-Za-z0-9-]{10,}\b|\bBearer\s+[A-Za-z0-9._~+/=-]{16,}/g,
+      refine: m => ({ start: m.index, length: m[0].length, kind: "alert", value: m[0] }),
+    },
+    {
+      id: "D-10", // secrets probables par entropie — alerte seulement
+      pattern: /(?<![A-Za-z0-9+/=_-])[A-Za-z0-9+/=_-]{20,}(?![A-Za-z0-9+/=_-])/g,
+      refine: m => looksLikeSecret(m[0])
+        ? { start: m.index, length: m[0].length, kind: "alert", value: m[0] }
+        : null,
+    },
+    {
+      id: "D-11", // URL interne — alerte seulement
+      pattern: /\bhttps?:\/\/[^\s"'<>()\]]+/gi,
+      refine: m => isWellKnownHost(extractHost(m[0]))
+        ? null
+        : { start: m.index, length: m[0].length, kind: "alert", value: m[0] },
+    },
+  ];
+
+  function tryAccept(acceptedBySegment, segmentIndex, detection, detectorId) {
+    let list = acceptedBySegment.get(segmentIndex);
+    if (!list) { list = []; acceptedBySegment.set(segmentIndex, list); }
+    const end = detection.start + detection.length;
+    for (const other of list) {
+      if (detection.start < other.start + other.length && other.start < end) return;
+    }
+    list.push({ ...detection, detectorId });
+  }
+
+  function autonomousPass(segments) {
+    const freeSegments = segments
+      .map((segment, index) => ({ index, segment }))
+      .filter(e => !e.segment.locked);
+    const acceptedBySegment = new Map();
+
+    for (const detector of DETECTORS) {
+      for (const { index, segment } of freeSegments) {
+        for (const m of segment.text.matchAll(detector.pattern)) {
+          const detection = detector.refine(m);
+          if (detection) tryAccept(acceptedBySegment, index, detection, detector.id);
+        }
+      }
+    }
+
+    // D-12 : chaque nom d'utilisateur relevé par D-01 est aussi remplacé
+    // partout où il apparaît isolé dans le texte (même jeton).
+    const userNames = new Map(); // minuscules → valeur canonique
+    for (const list of acceptedBySegment.values()) {
+      for (const a of list) {
+        if (a.detectorId === "D-01") userNames.set(a.value.toLowerCase(), a.value);
+      }
+    }
+    for (const name of userNames.values()) {
+      const pattern = new RegExp(`\\b${escapeRegex(name)}\\b`, "gi");
+      for (const { index, segment } of freeSegments) {
+        for (const m of segment.text.matchAll(pattern)) {
+          tryAccept(acceptedBySegment, index,
+            { start: m.index, length: m[0].length, kind: "replace", type: "USER", value: name }, "D-12");
+        }
+      }
+    }
+
+    // Jetons stables : même valeur ⇒ même jeton ; une seule valeur d'un type
+    // ⇒ XX_TYPE_XX, plusieurs ⇒ XX_TYPE_1_XX… par ordre d'apparition.
+    const valuesByType = new Map();
+    const orderedIndexes = [...acceptedBySegment.keys()].sort((a, b) => a - b);
+    for (const index of orderedIndexes) {
+      for (const a of acceptedBySegment.get(index).slice().sort((x, y) => x.start - y.start)) {
+        if (a.kind !== "replace") continue;
+        let values = valuesByType.get(a.type);
+        if (!values) { values = []; valuesByType.set(a.type, values); }
+        if (!values.includes(a.value.toUpperCase())) values.push(a.value.toUpperCase());
+      }
+    }
+    const tokenFor = (type, value) => {
+      const values = valuesByType.get(type);
+      return values.length === 1
+        ? `XX_${type}_XX`
+        : `XX_${type}_${values.indexOf(value.toUpperCase()) + 1}_XX`;
+    };
+
+    const next = [];
+    for (let i = 0; i < segments.length; i++) {
+      const edits = acceptedBySegment.get(i);
+      if (!edits || segments[i].locked) { next.push(segments[i]); continue; }
+      const resolved = edits
+        .slice().sort((a, b) => a.start - b.start)
+        .map(a => ({
+          start: a.start,
+          length: a.length,
+          replacement: a.kind === "replace" ? tokenFor(a.type, a.value) : null,
+          detectorId: a.detectorId,
+        }));
+      next.push(...splitSegment(segments[i], resolved));
+    }
+    return next;
+  }
+
+  // ----- Pipeline complet ----------------------------------------------------
+
+  function clean(text, rules) {
+    let segments = [freeSegment(String(text))];
+    segments = dictionaryPass(segments, rules || []);
+    segments = autonomousPass(segments);
+
+    let cleanText = "";
+    const spans = [];
+    let config = 0, auto = 0, alerts = 0;
+    for (const segment of segments) {
+      if (segment.locked) {
+        spans.push({
+          start: cleanText.length, length: segment.text.length,
+          kind: segment.kind, detectorId: segment.detectorId, original: segment.original,
+        });
+        if (segment.kind === "alert") alerts++;
+        else if (segment.detectorId === "config") config++;
+        else auto++;
+      }
+      cleanText += segment.text;
+    }
+    return {
+      cleanText, spans,
+      stats: { config, auto, alerts, total: config + auto },
+      warnings: [],
+    };
+  }
+
+  return { parseConfig, clean };
+})();
+/*ENGINE-END*/
+
+// ============================================================================
+// Interface — équivalent web de MainForm.
+// ============================================================================
+(() => {
+  const $ = id => document.getElementById(id);
+  const btnLoadConfig = $("btnLoadConfig"), fileInput = $("fileInput"),
+    btnHelp = $("btnHelp"), lblConfig = $("lblConfig"), chkRemember = $("chkRemember"),
+    txtInput = $("txtInput"), btnPaste = $("btnPaste"),
+    btnCopy = $("btnCopy"), btnHistory = $("btnHistory"), result = $("result"), status = $("status"),
+    helpDialog = $("helpDialog"), historyDialog = $("historyDialog"), historyList = $("historyList");
+
+  const STORAGE_KEY = "prompt-cleaner.config";
+  let rules = [];
+  let configText = null;
+  let configName = null;
+  let lastResult = null;
+  let debounceTimer = null;
+  let scanTimer = null;
+  const history = [];        // traitements de la session (en mémoire uniquement)
+  let historyId = 0;
+
+  const setStatus = text => { status.textContent = text; };
+
+  // ----- Config --------------------------------------------------------------
+
+  function applyConfig(text, name, source) {
+    const report = PromptCleaner.parseConfig(text);
+    rules = report.rules;
+    configText = text;
+    configName = name;
+    let label = `${name} — ${report.rules.length} règle(s)`;
+    if (report.ignoredLineCount > 0) label += `, ${report.ignoredLineCount} ligne(s) ignorée(s)`;
+    if (report.duplicateKeywordCount > 0) label += `, ${report.duplicateKeywordCount} doublon(s)`;
+    lblConfig.textContent = label;
+    lblConfig.style.color = "#1a1a1a";
+    setStatus(source === "storage"
+      ? `Config « ${name} » restaurée depuis ce navigateur — ${report.rules.length} règle(s).`
+      : source === "editor"
+        ? `Règles de l'éditeur appliquées — ${report.rules.length} règle(s).`
+        : `Config chargée — ${report.rules.length} règle(s).`);
+    persistIfWanted();
+    // Les règles ont changé : on re-nettoie le texte déjà saisi (FR : « lancer
+    // le clean même après chargement de fichier de règle ou application du template »).
+    if (txtInput.value.length > 0) refresh({ copy: source !== "storage", scan: true });
+  }
+
+  function persistIfWanted() {
+    try {
+      if (chkRemember.checked && configText !== null) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ name: configName, text: configText }));
+      } else if (!chkRemember.checked) {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    } catch { /* stockage local indisponible (navigation privée…) : tant pis */ }
+  }
+
+  function loadConfigFile(file) {
+    const reader = new FileReader();
+    reader.onload = () => applyConfig(String(reader.result), file.name, "file");
+    reader.onerror = () => setStatus(`Impossible de lire « ${file.name} ».`);
+    reader.readAsText(file, "utf-8");
+  }
+
+  btnLoadConfig.addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", () => {
+    if (fileInput.files.length > 0) loadConfigFile(fileInput.files[0]);
+    fileInput.value = "";
+  });
+  chkRemember.addEventListener("change", persistIfWanted);
+
+  // Glisser-déposer du fichier .cfg n'importe où sur la page.
+  document.body.addEventListener("dragover", e => { e.preventDefault(); document.body.classList.add("dragover"); });
+  document.body.addEventListener("dragleave", () => document.body.classList.remove("dragover"));
+  document.body.addEventListener("drop", e => {
+    e.preventDefault();
+    document.body.classList.remove("dragover");
+    if (e.dataTransfer.files.length > 0) loadConfigFile(e.dataTransfer.files[0]);
+  });
+
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      chkRemember.checked = true;
+      const { name, text } = JSON.parse(saved);
+      applyConfig(text, name, "storage");
+    }
+  } catch { /* stockage corrompu ou indisponible : on démarre sans config */ }
+
+  // ----- Presse-papier ---------------------------------------------------------
+
+  async function copyToClipboard(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Repli pour les navigateurs qui refusent l'API sur les pages locales.
+      const helper = document.createElement("textarea");
+      helper.value = text;
+      document.body.appendChild(helper);
+      helper.select();
+      const ok = document.execCommand("copy");
+      helper.remove();
+      return ok;
+    }
+  }
+
+  btnPaste.addEventListener("click", async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        // Remplace le contenu existant (pas d'ajout) : inutile de vider avant.
+        txtInput.value = text;
+        refresh({ copy: true, scan: true });
+      } else {
+        setStatus("Le presse-papier ne contient pas de texte.");
+      }
+    } catch {
+      // Lecture refusée par le navigateur : on sélectionne tout le contenu pour
+      // que le Ctrl+V suivant le remplace au lieu de s'y ajouter.
+      txtInput.focus();
+      txtInput.select();
+      setStatus("Lecture du presse-papier refusée : faites Ctrl+V, le contenu sélectionné sera remplacé.");
+    }
+  });
+
+  // ----- Nettoyage automatique --------------------------------------------------
+
+  // Rejoue l'animation de scan une fois (même sur collages rapprochés).
+  function triggerScan() {
+    if (scanTimer) clearTimeout(scanTimer);
+    document.body.classList.remove("processing");
+    void document.body.offsetWidth; // force un reflow pour relancer l'animation
+    document.body.classList.add("processing");
+    scanTimer = setTimeout(() => document.body.classList.remove("processing"), 850);
+  }
+
+  // Cœur du nettoyage. copy : n'écrit dans le presse-papier que si vrai — et
+  // seulement possible pendant un geste utilisateur (collage, clic, Ctrl+Entrée).
+  function refresh({ copy, scan }) {
+    const input = txtInput.value;
+    if (!input) {
+      result.textContent = "";
+      lastResult = null;
+      btnCopy.disabled = true;
+      setStatus("Collez votre texte : le nettoyage se lance automatiquement.");
+      return;
+    }
+    if (scan) triggerScan();
+    const res = PromptCleaner.clean(input, rules);
+    lastResult = res;
+    renderResult(res);
+    btnCopy.disabled = res.cleanText.length === 0;
+    // Un nettoyage abouti (collage, application de règles, Ctrl+Entrée) est
+    // mémorisé dans l'historique de session.
+    if (copy) recordHistory();
+    if (copy && res.cleanText.length > 0) {
+      copyToClipboard(res.cleanText).then(ok =>
+        setStatus(`${describe(res.stats)} — ${ok ? "copié dans le presse-papier ✔" : "cliquez sur Copier"}`));
+    } else {
+      setStatus(`${describe(res.stats)} — cliquez sur Copier pour le presse-papier`);
+    }
+  }
+
+  // Saisie/édition au clavier : aperçu live, sans toucher au presse-papier.
+  txtInput.addEventListener("input", () => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => refresh({ copy: false, scan: false }), 300);
+  });
+
+  // Collage : on insère le texte puis on nettoie ET copie dans la foulée —
+  // le presse-papier n'est accessible en écriture que dans ce geste.
+  txtInput.addEventListener("paste", e => {
+    e.preventDefault();
+    const pasted = (e.clipboardData || window.clipboardData).getData("text");
+    const el = txtInput, start = el.selectionStart, end = el.selectionEnd;
+    el.value = el.value.slice(0, start) + pasted + el.value.slice(end);
+    el.selectionStart = el.selectionEnd = start + pasted.length;
+    if (debounceTimer) clearTimeout(debounceTimer);
+    refresh({ copy: true, scan: true });
+  });
+
+  // Ctrl+Entrée : force un nettoyage + copie (utile après une saisie manuelle).
+  document.addEventListener("keydown", e => {
+    if (e.ctrlKey && e.key === "Enter" && txtInput.value.length > 0) {
+      e.preventDefault();
+      refresh({ copy: true, scan: true });
+    }
+  });
+
+  // Sortie de la zone d'entrée : on fige le traitement en cours dans l'historique
+  // (capture les nettoyages issus d'une saisie manuelle, pas seulement des collages).
+  txtInput.addEventListener("blur", () => {
+    if (txtInput.value.length === 0) return;
+    if (debounceTimer) clearTimeout(debounceTimer);
+    refresh({ copy: false, scan: false });
+    recordHistory();
+  });
+
+  function renderResult(res) {
+    result.textContent = "";
+    let position = 0;
+    for (const span of res.spans) {
+      if (span.start > position) {
+        result.appendChild(document.createTextNode(res.cleanText.slice(position, span.start)));
+      }
+      const mark = document.createElement("span");
+      mark.className = span.kind;
+      mark.title = span.kind === "alert"
+        ? `${span.detectorId} : donnée suspecte, à vérifier`
+        : `${span.detectorId} : « ${span.original} »`;
+      mark.textContent = res.cleanText.slice(span.start, span.start + span.length);
+      result.appendChild(mark);
+      position = span.start + span.length;
+    }
+    if (position < res.cleanText.length) {
+      result.appendChild(document.createTextNode(res.cleanText.slice(position)));
+    }
+  }
+
+  function describe(stats) {
+    if (stats.total === 0 && stats.alerts === 0) return "Aucune donnée sensible détectée";
+    return `${stats.total} remplacement(s) (${stats.config} config, ${stats.auto} auto) — ${stats.alerts} alerte(s)`;
+  }
+
+  btnCopy.addEventListener("click", async () => {
+    if (lastResult && lastResult.cleanText.length > 0) {
+      const ok = await copyToClipboard(lastResult.cleanText);
+      setStatus(ok ? "Résultat recopié dans le presse-papier." : "La copie a été refusée par le navigateur.");
+    }
+  });
+
+  // ----- Éditeur de règles (popin « ? ») -------------------------------------------
+
+  const cfgEditor = $("cfgEditor"), editorReport = $("editorReport");
+
+  const EXAMPLE_RULES = `# Les lignes vides et celles commençant par # sont ignorées.
+# Une règle par ligne, au format : motclé : remplacement
+
+google : mon-entreprise
+fb44ja8k : nom-user
+myApp : nom-application
+
+# La casse des mots-clés est ignorée (Google = google = GOOGLE).
+# Seul le premier « : » sépare : la valeur peut en contenir.
+portail : https://intranet.exemple:8080/accueil`;
+
+  function updateEditorReport() {
+    const report = PromptCleaner.parseConfig(cfgEditor.value);
+    let text = `${report.rules.length} règle(s)`;
+    if (report.ignoredLineCount > 0) text += ` · ${report.ignoredLineCount} ligne(s) ignorée(s)`;
+    if (report.duplicateKeywordCount > 0) text += ` · ${report.duplicateKeywordCount} doublon(s)`;
+    editorReport.textContent = text;
+  }
+
+  btnHelp.addEventListener("click", () => {
+    // La popin édite la config courante ; l'exemple ne sert que de modèle de départ.
+    cfgEditor.value = configText ?? EXAMPLE_RULES;
+    updateEditorReport();
+    helpDialog.showModal();
+  });
+
+  cfgEditor.addEventListener("input", updateEditorReport);
+
+  $("btnResetExample").addEventListener("click", () => {
+    cfgEditor.value = EXAMPLE_RULES;
+    updateEditorReport();
+  });
+
+  $("btnCopyRules").addEventListener("click", async () => {
+    editorReport.textContent = (await copyToClipboard(cfgEditor.value))
+      ? "Règles copiées dans le presse-papier ✔ (à coller dans un fichier .cfg)"
+      : "La copie a été refusée par le navigateur.";
+  });
+
+  $("btnApplyRules").addEventListener("click", () => {
+    applyConfig(cfgEditor.value, "règles de l'éditeur", "editor");
+    helpDialog.close();
+  });
+
+  $("btnCloseHelp").addEventListener("click", () => helpDialog.close());
+
+  // ----- Historique de session -----------------------------------------------------
+
+  function updateHistoryButton() {
+    btnHistory.disabled = history.length === 0;
+    btnHistory.textContent = history.length ? `Historique (${history.length})` : "Historique";
+  }
+
+  function recordHistory() {
+    if (!lastResult || txtInput.value.length === 0) return;
+    const input = txtInput.value;
+    const snapshotText = configText ?? "";
+    const last = history[0];
+    // Évite les doublons consécutifs (même entrée + mêmes règles).
+    if (last && last.input === input && last.configText === snapshotText) return;
+    history.unshift({
+      id: ++historyId,
+      at: new Date(),
+      input,
+      output: lastResult.cleanText,
+      stats: lastResult.stats,
+      configName,
+      configText: snapshotText,
+      rulesCount: rules.length,
+    });
+    if (history.length > 50) history.length = 50; // borne mémoire
+    updateHistoryButton();
+  }
+
+  function reloadEntry(entry) {
+    // Restaure les règles telles qu'au moment du traitement…
+    const report = PromptCleaner.parseConfig(entry.configText);
+    rules = report.rules;
+    configText = entry.configText === "" ? null : entry.configText;
+    configName = entry.configName;
+    lblConfig.textContent = entry.configName
+      ? `${entry.configName} — ${report.rules.length} règle(s)`
+      : "Aucune config chargée";
+    lblConfig.style.color = entry.configName ? "#1a1a1a" : "#666";
+    // …puis le texte, et on régénère l'affichage (sans ré-enregistrer).
+    txtInput.value = entry.input;
+    historyDialog.close();
+    refresh({ copy: false, scan: true });
+    setStatus(`Traitement du ${entry.at.toLocaleTimeString("fr-FR")} rechargé — cliquez sur Copier pour le presse-papier.`);
+  }
+
+  function renderHistory() {
+    historyList.textContent = "";
+    if (history.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "hist-empty";
+      empty.textContent = "Aucun traitement pour l'instant.";
+      historyList.appendChild(empty);
+      return;
+    }
+    for (const entry of history) {
+      const item = document.createElement("div");
+      item.className = "hist-item";
+
+      const meta = document.createElement("div");
+      meta.className = "hist-meta";
+      meta.textContent = `${entry.at.toLocaleTimeString("fr-FR")} · `
+        + `${entry.stats.total} remplacement(s), ${entry.stats.alerts} alerte(s) · `
+        + `règles : ${entry.configName || "aucune"}`;
+      item.appendChild(meta);
+
+      const preview = document.createElement("div");
+      preview.className = "hist-preview";
+      preview.textContent = entry.input.length > 160 ? entry.input.slice(0, 160) + "…" : entry.input;
+      item.appendChild(preview);
+
+      const actions = document.createElement("div");
+      actions.className = "hist-actions";
+      const reload = document.createElement("button");
+      reload.textContent = "Recharger";
+      reload.addEventListener("click", () => reloadEntry(entry));
+      const copyOut = document.createElement("button");
+      copyOut.textContent = "Copier la sortie";
+      copyOut.addEventListener("click", async () => {
+        const ok = await copyToClipboard(entry.output);
+        copyOut.textContent = ok ? "Copié ✔" : "Copie refusée";
+        setTimeout(() => { copyOut.textContent = "Copier la sortie"; }, 1500);
+      });
+      actions.appendChild(reload);
+      actions.appendChild(copyOut);
+      item.appendChild(actions);
+
+      historyList.appendChild(item);
+    }
+  }
+
+  btnHistory.addEventListener("click", () => { renderHistory(); historyDialog.showModal(); });
+  $("btnCloseHistory").addEventListener("click", () => historyDialog.close());
+  $("btnClearHistory").addEventListener("click", () => {
+    history.length = 0;
+    updateHistoryButton();
+    renderHistory();
+  });
+})();
+</script>
+</body>
+</html>
