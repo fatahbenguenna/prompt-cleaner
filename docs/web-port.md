@@ -39,7 +39,7 @@ Garanties :
 | Auto-chargement de `prompt-cleaner.cfg` à côté de l'exe | Impossible depuis un navigateur → case « mémoriser dans ce navigateur » (localStorage, opt-in) |
 | Bouton Clean | supprimé : nettoyage **automatique** (voir §4bis) |
 | Copie auto dans le presse-papier | `navigator.clipboard.writeText` + repli `execCommand("copy")` |
-| Bouton Coller | `clipboard.readText` si le navigateur l'autorise, sinon message invitant à Ctrl+V |
+| Bouton Coller | **remplace** le contenu (vide + colle) via `clipboard.readText` ; si refusé, sélectionne tout pour qu'un Ctrl+V remplace au lieu d'ajouter |
 | RichTextBox verte/rouge + légende | `<span class="replaced|alert">` (mêmes couleurs, contrastes AA conservés) + légende |
 | Barre d'état | pied de page de statut |
 | Popin « ? » format de config | `<dialog>` natif devenu **éditeur de règles intégré** : pré-rempli avec la config courante (ou l'exemple), compteur de règles en direct, « Utiliser ces règles » applique le contenu sans fichier, « Copier » permet d'en faire un `.cfg` |
@@ -59,6 +59,22 @@ en écriture que pendant un geste utilisateur**.
 
 Le liseré de scan du bandeau ne s'affiche donc **que le temps d'un nettoyage
 déclenché** (~0,85 s), et non plus en boucle continue.
+
+## 4ter. Historique de session
+
+Chaque nettoyage abouti (collage, application de règles, Ctrl+Entrée, ou sortie
+de la zone d'entrée après une saisie) est mémorisé **en mémoire uniquement** —
+jamais écrit sur le disque : l'historique disparaît à la fermeture ou au
+rechargement de la page. Ce choix est volontaire, l'outil manipulant des données
+sensibles.
+
+Chaque entrée conserve : le texte d'entrée, le texte de sortie nettoyé, les
+statistiques (remplacements/alertes) et un instantané des règles utilisées
+(nom + contenu). Le bouton « Historique (N) » ouvre une liste (les 50 derniers,
+plus récents d'abord) où chaque traitement peut être **rechargé** (texte + règles
+d'origine restaurés, résultat régénéré) ou dont la **sortie peut être recopiée**.
+Un bouton « Vider l'historique » remet le compteur à zéro. Les doublons consécutifs
+(même entrée + mêmes règles) ne sont pas ré-enregistrés.
 
 ## 4. Compromis assumés
 

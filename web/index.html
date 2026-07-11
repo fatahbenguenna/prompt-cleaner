@@ -110,6 +110,19 @@
   #editorReport { font-size: .85rem; color: #555; margin-top: 4px; min-height: 1.2em; }
   dialog ul { font-size: .9rem; padding-left: 20px; }
   #btnApplyRules { font-weight: 600; }
+  #historyList { max-height: 52vh; overflow-y: auto; margin: 6px 0; }
+  .hist-item {
+    border: 1px solid var(--border); border-radius: 5px;
+    padding: 8px 10px; margin-bottom: 8px;
+  }
+  .hist-meta { font-size: .78rem; color: #555; }
+  .hist-preview {
+    font: .82rem/1.35 Consolas, monospace; color: #222; margin: 5px 0 7px;
+    white-space: pre-wrap; word-break: break-word; max-height: 3.6em; overflow: hidden;
+  }
+  .hist-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .hist-actions button { padding: 3px 10px; font-size: .82rem; }
+  .hist-empty { color: #777; font-size: .9rem; }
   .dialog-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
   body.dragover { outline: 3px dashed #7aa7d9; outline-offset: -6px; }
 </style>
@@ -162,6 +175,7 @@
     <div class="bar">
       <label class="head">Résultat — nettoyage et copie automatiques</label>
       <span class="spacer"></span>
+      <button id="btnHistory" disabled>Historique</button>
       <button id="btnCopy" disabled>Copier</button>
     </div>
     <div id="result" tabindex="0" aria-label="Résultat nettoyé"></div>
@@ -213,6 +227,18 @@ la détection automatique fonctionne sans aucune configuration.</footer>
     <button id="btnCopyRules">Copier</button>
     <button id="btnApplyRules">Utiliser ces règles</button>
     <button id="btnCloseHelp">Fermer</button>
+  </div>
+</dialog>
+
+<dialog id="historyDialog">
+  <h2>Historique de la session</h2>
+  <p>Chaque nettoyage est mémorisé le temps de la session — rien n'est écrit sur le disque,
+  tout disparaît à la fermeture ou au rechargement de la page. Rechargez un traitement pour
+  retrouver son texte d'entrée, ses règles et son résultat.</p>
+  <div id="historyList"></div>
+  <div class="dialog-buttons">
+    <button id="btnClearHistory">Vider l'historique</button>
+    <button id="btnCloseHistory">Fermer</button>
   </div>
 </dialog>
 
@@ -595,8 +621,8 @@ const PromptCleaner = (() => {
   const btnLoadConfig = $("btnLoadConfig"), fileInput = $("fileInput"),
     btnHelp = $("btnHelp"), lblConfig = $("lblConfig"), chkRemember = $("chkRemember"),
     txtInput = $("txtInput"), btnPaste = $("btnPaste"),
-    btnCopy = $("btnCopy"), result = $("result"), status = $("status"),
-    helpDialog = $("helpDialog");
+    btnCopy = $("btnCopy"), btnHistory = $("btnHistory"), result = $("result"), status = $("status"),
+    helpDialog = $("helpDialog"), historyDialog = $("historyDialog"), historyList = $("historyList");
 
   const STORAGE_KEY = "prompt-cleaner.config";
   let rules = [];
@@ -605,6 +631,8 @@ const PromptCleaner = (() => {
   let lastResult = null;
   let debounceTimer = null;
   let scanTimer = null;
+  const history = [];        // traitements de la session (en mémoire uniquement)
+  let historyId = 0;
 
   const setStatus = text => { status.textContent = text; };
 
@@ -695,14 +723,18 @@ const PromptCleaner = (() => {
     try {
       const text = await navigator.clipboard.readText();
       if (text) {
+        // Remplace le contenu existant (pas d'ajout) : inutile de vider avant.
         txtInput.value = text;
         refresh({ copy: true, scan: true });
       } else {
         setStatus("Le presse-papier ne contient pas de texte.");
       }
     } catch {
+      // Lecture refusée par le navigateur : on sélectionne tout le contenu pour
+      // que le Ctrl+V suivant le remplace au lieu de s'y ajouter.
       txtInput.focus();
-      setStatus("Ce navigateur ne permet pas de lire le presse-papier ici : utilisez Ctrl+V dans la zone de texte.");
+      txtInput.select();
+      setStatus("Lecture du presse-papier refusée : faites Ctrl+V, le contenu sélectionné sera remplacé.");
     }
   });
 
@@ -733,6 +765,9 @@ const PromptCleaner = (() => {
     lastResult = res;
     renderResult(res);
     btnCopy.disabled = res.cleanText.length === 0;
+    // Un nettoyage abouti (collage, application de règles, Ctrl+Entrée) est
+    // mémorisé dans l'historique de session.
+    if (copy) recordHistory();
     if (copy && res.cleanText.length > 0) {
       copyToClipboard(res.cleanText).then(ok =>
         setStatus(`${describe(res.stats)} — ${ok ? "copié dans le presse-papier ✔" : "cliquez sur Copier"}`));
@@ -765,6 +800,15 @@ const PromptCleaner = (() => {
       e.preventDefault();
       refresh({ copy: true, scan: true });
     }
+  });
+
+  // Sortie de la zone d'entrée : on fige le traitement en cours dans l'historique
+  // (capture les nettoyages issus d'une saisie manuelle, pas seulement des collages).
+  txtInput.addEventListener("blur", () => {
+    if (txtInput.value.length === 0) return;
+    if (debounceTimer) clearTimeout(debounceTimer);
+    refresh({ copy: false, scan: false });
+    recordHistory();
   });
 
   function renderResult(res) {
@@ -849,6 +893,104 @@ portail : https://intranet.exemple:8080/accueil`;
   });
 
   $("btnCloseHelp").addEventListener("click", () => helpDialog.close());
+
+  // ----- Historique de session -----------------------------------------------------
+
+  function updateHistoryButton() {
+    btnHistory.disabled = history.length === 0;
+    btnHistory.textContent = history.length ? `Historique (${history.length})` : "Historique";
+  }
+
+  function recordHistory() {
+    if (!lastResult || txtInput.value.length === 0) return;
+    const input = txtInput.value;
+    const snapshotText = configText ?? "";
+    const last = history[0];
+    // Évite les doublons consécutifs (même entrée + mêmes règles).
+    if (last && last.input === input && last.configText === snapshotText) return;
+    history.unshift({
+      id: ++historyId,
+      at: new Date(),
+      input,
+      output: lastResult.cleanText,
+      stats: lastResult.stats,
+      configName,
+      configText: snapshotText,
+      rulesCount: rules.length,
+    });
+    if (history.length > 50) history.length = 50; // borne mémoire
+    updateHistoryButton();
+  }
+
+  function reloadEntry(entry) {
+    // Restaure les règles telles qu'au moment du traitement…
+    const report = PromptCleaner.parseConfig(entry.configText);
+    rules = report.rules;
+    configText = entry.configText === "" ? null : entry.configText;
+    configName = entry.configName;
+    lblConfig.textContent = entry.configName
+      ? `${entry.configName} — ${report.rules.length} règle(s)`
+      : "Aucune config chargée";
+    lblConfig.style.color = entry.configName ? "#1a1a1a" : "#666";
+    // …puis le texte, et on régénère l'affichage (sans ré-enregistrer).
+    txtInput.value = entry.input;
+    historyDialog.close();
+    refresh({ copy: false, scan: true });
+    setStatus(`Traitement du ${entry.at.toLocaleTimeString("fr-FR")} rechargé — cliquez sur Copier pour le presse-papier.`);
+  }
+
+  function renderHistory() {
+    historyList.textContent = "";
+    if (history.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "hist-empty";
+      empty.textContent = "Aucun traitement pour l'instant.";
+      historyList.appendChild(empty);
+      return;
+    }
+    for (const entry of history) {
+      const item = document.createElement("div");
+      item.className = "hist-item";
+
+      const meta = document.createElement("div");
+      meta.className = "hist-meta";
+      meta.textContent = `${entry.at.toLocaleTimeString("fr-FR")} · `
+        + `${entry.stats.total} remplacement(s), ${entry.stats.alerts} alerte(s) · `
+        + `règles : ${entry.configName || "aucune"}`;
+      item.appendChild(meta);
+
+      const preview = document.createElement("div");
+      preview.className = "hist-preview";
+      preview.textContent = entry.input.length > 160 ? entry.input.slice(0, 160) + "…" : entry.input;
+      item.appendChild(preview);
+
+      const actions = document.createElement("div");
+      actions.className = "hist-actions";
+      const reload = document.createElement("button");
+      reload.textContent = "Recharger";
+      reload.addEventListener("click", () => reloadEntry(entry));
+      const copyOut = document.createElement("button");
+      copyOut.textContent = "Copier la sortie";
+      copyOut.addEventListener("click", async () => {
+        const ok = await copyToClipboard(entry.output);
+        copyOut.textContent = ok ? "Copié ✔" : "Copie refusée";
+        setTimeout(() => { copyOut.textContent = "Copier la sortie"; }, 1500);
+      });
+      actions.appendChild(reload);
+      actions.appendChild(copyOut);
+      item.appendChild(actions);
+
+      historyList.appendChild(item);
+    }
+  }
+
+  btnHistory.addEventListener("click", () => { renderHistory(); historyDialog.showModal(); });
+  $("btnCloseHistory").addEventListener("click", () => historyDialog.close());
+  $("btnClearHistory").addEventListener("click", () => {
+    history.length = 0;
+    updateHistoryButton();
+    renderHistory();
+  });
 })();
 </script>
 </body>
