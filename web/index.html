@@ -166,7 +166,7 @@
     <div class="bar">
       <label class="head" for="txtInput">Texte d'entrée</label>
       <span class="spacer"></span>
-      <button id="btnPaste">Coller</button>
+      <button id="btnPaste" title="Colle le presse-papier en remplaçant le texte (ou appuyez sur Ctrl+V)">Coller</button>
     </div>
     <textarea id="txtInput" spellcheck="false" placeholder="Collez votre texte ici (Ctrl+V) : le nettoyage est automatique…"></textarea>
   </section>
@@ -719,23 +719,33 @@ const PromptCleaner = (() => {
     }
   }
 
+  // Vrai si le prochain collage clavier doit écraser tout le contenu (armé par
+  // le bouton Coller quand la lecture directe du presse-papier est impossible).
+  let overwriteOnNextPaste = false;
+
   btnPaste.addEventListener("click", async () => {
+    // La lecture directe du presse-papier n'est autorisée que sur une page
+    // hébergée (https) et sur certains navigateurs ; sur un fichier ouvert en
+    // local (file://) elle est presque toujours bloquée. On tente, puis on
+    // bascule sur un repli Ctrl+V qui, lui, fonctionne partout.
     try {
-      const text = await navigator.clipboard.readText();
-      if (text) {
-        // Remplace le contenu existant (pas d'ajout) : inutile de vider avant.
-        txtInput.value = text;
-        refresh({ copy: true, scan: true });
-      } else {
-        setStatus("Le presse-papier ne contient pas de texte.");
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+          txtInput.value = text;               // écrase le contenu existant
+          refresh({ copy: true, scan: true });
+        } else {
+          setStatus("Le presse-papier ne contient pas de texte.");
+        }
+        return;
       }
-    } catch {
-      // Lecture refusée par le navigateur : on sélectionne tout le contenu pour
-      // que le Ctrl+V suivant le remplace au lieu de s'y ajouter.
-      txtInput.focus();
-      txtInput.select();
-      setStatus("Lecture du presse-papier refusée : faites Ctrl+V, le contenu sélectionné sera remplacé.");
-    }
+    } catch { /* lecture refusée : repli ci-dessous */ }
+
+    // Repli universel : le prochain Ctrl+V écrasera tout le contenu.
+    overwriteOnNextPaste = true;
+    txtInput.focus();
+    txtInput.select();
+    setStatus("Presse-papier non lisible ici — appuyez sur Ctrl+V : le texte existant sera remplacé.");
   });
 
   // ----- Nettoyage automatique --------------------------------------------------
@@ -787,9 +797,17 @@ const PromptCleaner = (() => {
   txtInput.addEventListener("paste", e => {
     e.preventDefault();
     const pasted = (e.clipboardData || window.clipboardData).getData("text");
-    const el = txtInput, start = el.selectionStart, end = el.selectionEnd;
-    el.value = el.value.slice(0, start) + pasted + el.value.slice(end);
-    el.selectionStart = el.selectionEnd = start + pasted.length;
+    const el = txtInput;
+    if (overwriteOnNextPaste) {
+      // Écrasement demandé via le bouton Coller : on remplace tout.
+      el.value = pasted;
+      el.selectionStart = el.selectionEnd = pasted.length;
+    } else {
+      const start = el.selectionStart, end = el.selectionEnd;
+      el.value = el.value.slice(0, start) + pasted + el.value.slice(end);
+      el.selectionStart = el.selectionEnd = start + pasted.length;
+    }
+    overwriteOnNextPaste = false;
     if (debounceTimer) clearTimeout(debounceTimer);
     refresh({ copy: true, scan: true });
   });
