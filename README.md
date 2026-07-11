@@ -26,6 +26,14 @@ Récupérez `prompt-cleaner.exe` dans les [Releases GitHub](../../releases) (ou 
 
 Raccourcis clavier : `Alt+C` charger la config, `Alt+O` coller, `Alt+L` ou `Ctrl+Entrée` nettoyer, `Alt+P` copier.
 
+## Variante web (zéro exécutable)
+
+Si l'exécutable subit trop de friction antivirus/SmartScreen sur votre poste, la même application existe en **un seul fichier `web/index.html`** : téléchargez-le et double-cliquez — il s'ouvre dans votre navigateur, fonctionne 100 % hors-ligne (une CSP intégrée lui interdit tout appel réseau) et embarque le même moteur de nettoyage (dictionnaire + détecteurs D-01 à D-12). Le chargement de la config passe par le même explorateur de fichiers (ou un glisser-déposer), et une case « mémoriser dans ce navigateur » remplace l'auto-chargement du `.cfg`. Le bouton « ? » ouvre un **éditeur de règles intégré** : définissez ou modifiez vos règles directement dans la page et appliquez-les sans passer par un fichier.
+
+Le nettoyage y est **automatique** : à un collage, le texte est nettoyé et le résultat copié dans le presse-papier immédiatement (un bref balayage lumineux du bandeau signale le scan) ; une saisie au clavier met le résultat à jour en direct, le bouton **Copier** (ou Ctrl+Entrée) servant alors à le placer dans le presse-papier. Le bouton **Coller** remplace le contenu existant (pas besoin de vider avant).
+
+Un **historique de session** (bouton « Historique ») mémorise chaque traitement — texte d'entrée, sortie nettoyée et règles utilisées — et permet de les recharger. Il reste en mémoire uniquement (rien sur le disque) et disparaît à la fermeture de la page. Voir `docs/web-port.md` pour les détails et compromis.
+
 ## Technologie retenue
 
 **C# / .NET 8 WinForms**, publié en *self-contained single-file* (`win-x64`) : un unique `prompt-cleaner.exe` embarquant le runtime — double-clic sur tout Windows 10/11, y compris depuis une clé USB, sans droits administrateur. Hors-ligne par conception : aucun appel réseau, aucune écriture disque du texte traité. Le choix est argumenté (matrice de décision) dans `docs/architecture.md`.
