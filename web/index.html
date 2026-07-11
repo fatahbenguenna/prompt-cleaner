@@ -32,7 +32,9 @@
   .banner-art { display: block; width: 100%; height: 132px; }
   .banner-art .bits text { fill: #37d67a; opacity: .22; }
   .banner-art .bits .tok { fill: #8ef7b4; opacity: .95; }
-  .banner-art .scanline { animation: banner-sweep 4.5s linear infinite; }
+  /* Le scan ne se joue qu'au moment du nettoyage (classe .processing). */
+  .banner-art .scanline { opacity: 0; }
+  body.processing .banner-art .scanline { opacity: 1; animation: banner-sweep .85s linear; }
   @keyframes banner-sweep {
     from { transform: translateX(0); }
     to   { transform: translateX(1340px); }
@@ -47,7 +49,7 @@
   .banner-text h1 { font-size: 1.55rem; }
   .banner-text .tagline { color: #d7f5e4; margin: 4px 0 0; font-size: .9rem; }
   @media (prefers-reduced-motion: reduce) {
-    .banner-art .scanline { animation: none; opacity: .35; transform: translateX(500px); }
+    body.processing .banner-art .scanline { animation: none; opacity: 0; }
   }
   .layout {
     display: grid; grid-template-columns: minmax(0, 1fr) 300px;
@@ -73,9 +75,7 @@
   }
   button:hover:not(:disabled) { background: #f0f0f0; }
   button:disabled { opacity: .5; cursor: default; }
-  #btnClean { font-weight: 600; padding: 8px 28px; }
   #btnHelp { font-weight: 700; padding: 5px 11px; }
-  .clean-row { text-align: center; margin: 12px 0; }
   label.head { font-weight: 600; }
   #lblConfig { color: #666; font-size: .9rem; }
   .remember { font-size: .85rem; color: #555; user-select: none; }
@@ -155,14 +155,12 @@
       <span class="spacer"></span>
       <button id="btnPaste">Coller</button>
     </div>
-    <textarea id="txtInput" spellcheck="false" placeholder="Collez votre texte ici (Ctrl+V)…"></textarea>
+    <textarea id="txtInput" spellcheck="false" placeholder="Collez votre texte ici (Ctrl+V) : le nettoyage est automatique…"></textarea>
   </section>
-
-  <div class="clean-row"><button id="btnClean" disabled>🧹 Clean</button></div>
 
   <section>
     <div class="bar">
-      <label class="head">Résultat (copié automatiquement dans le presse-papier)</label>
+      <label class="head">Résultat — nettoyage et copie automatiques</label>
       <span class="spacer"></span>
       <button id="btnCopy" disabled>Copier</button>
     </div>
@@ -596,7 +594,7 @@ const PromptCleaner = (() => {
   const $ = id => document.getElementById(id);
   const btnLoadConfig = $("btnLoadConfig"), fileInput = $("fileInput"),
     btnHelp = $("btnHelp"), lblConfig = $("lblConfig"), chkRemember = $("chkRemember"),
-    txtInput = $("txtInput"), btnPaste = $("btnPaste"), btnClean = $("btnClean"),
+    txtInput = $("txtInput"), btnPaste = $("btnPaste"),
     btnCopy = $("btnCopy"), result = $("result"), status = $("status"),
     helpDialog = $("helpDialog");
 
@@ -605,6 +603,8 @@ const PromptCleaner = (() => {
   let configText = null;
   let configName = null;
   let lastResult = null;
+  let debounceTimer = null;
+  let scanTimer = null;
 
   const setStatus = text => { status.textContent = text; };
 
@@ -626,6 +626,9 @@ const PromptCleaner = (() => {
         ? `Règles de l'éditeur appliquées — ${report.rules.length} règle(s).`
         : `Config chargée — ${report.rules.length} règle(s).`);
     persistIfWanted();
+    // Les règles ont changé : on re-nettoie le texte déjà saisi (FR : « lancer
+    // le clean même après chargement de fichier de règle ou application du template »).
+    if (txtInput.value.length > 0) refresh({ copy: source !== "storage", scan: true });
   }
 
   function persistIfWanted() {
@@ -693,8 +696,7 @@ const PromptCleaner = (() => {
       const text = await navigator.clipboard.readText();
       if (text) {
         txtInput.value = text;
-        txtInput.dispatchEvent(new Event("input"));
-        setStatus("Texte collé depuis le presse-papier.");
+        refresh({ copy: true, scan: true });
       } else {
         setStatus("Le presse-papier ne contient pas de texte.");
       }
@@ -704,9 +706,66 @@ const PromptCleaner = (() => {
     }
   });
 
-  // ----- Nettoyage --------------------------------------------------------------
+  // ----- Nettoyage automatique --------------------------------------------------
 
-  txtInput.addEventListener("input", () => { btnClean.disabled = txtInput.value.length === 0; });
+  // Rejoue l'animation de scan une fois (même sur collages rapprochés).
+  function triggerScan() {
+    if (scanTimer) clearTimeout(scanTimer);
+    document.body.classList.remove("processing");
+    void document.body.offsetWidth; // force un reflow pour relancer l'animation
+    document.body.classList.add("processing");
+    scanTimer = setTimeout(() => document.body.classList.remove("processing"), 850);
+  }
+
+  // Cœur du nettoyage. copy : n'écrit dans le presse-papier que si vrai — et
+  // seulement possible pendant un geste utilisateur (collage, clic, Ctrl+Entrée).
+  function refresh({ copy, scan }) {
+    const input = txtInput.value;
+    if (!input) {
+      result.textContent = "";
+      lastResult = null;
+      btnCopy.disabled = true;
+      setStatus("Collez votre texte : le nettoyage se lance automatiquement.");
+      return;
+    }
+    if (scan) triggerScan();
+    const res = PromptCleaner.clean(input, rules);
+    lastResult = res;
+    renderResult(res);
+    btnCopy.disabled = res.cleanText.length === 0;
+    if (copy && res.cleanText.length > 0) {
+      copyToClipboard(res.cleanText).then(ok =>
+        setStatus(`${describe(res.stats)} — ${ok ? "copié dans le presse-papier ✔" : "cliquez sur Copier"}`));
+    } else {
+      setStatus(`${describe(res.stats)} — cliquez sur Copier pour le presse-papier`);
+    }
+  }
+
+  // Saisie/édition au clavier : aperçu live, sans toucher au presse-papier.
+  txtInput.addEventListener("input", () => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => refresh({ copy: false, scan: false }), 300);
+  });
+
+  // Collage : on insère le texte puis on nettoie ET copie dans la foulée —
+  // le presse-papier n'est accessible en écriture que dans ce geste.
+  txtInput.addEventListener("paste", e => {
+    e.preventDefault();
+    const pasted = (e.clipboardData || window.clipboardData).getData("text");
+    const el = txtInput, start = el.selectionStart, end = el.selectionEnd;
+    el.value = el.value.slice(0, start) + pasted + el.value.slice(end);
+    el.selectionStart = el.selectionEnd = start + pasted.length;
+    if (debounceTimer) clearTimeout(debounceTimer);
+    refresh({ copy: true, scan: true });
+  });
+
+  // Ctrl+Entrée : force un nettoyage + copie (utile après une saisie manuelle).
+  document.addEventListener("keydown", e => {
+    if (e.ctrlKey && e.key === "Enter" && txtInput.value.length > 0) {
+      e.preventDefault();
+      refresh({ copy: true, scan: true });
+    }
+  });
 
   function renderResult(res) {
     result.textContent = "";
@@ -733,22 +792,6 @@ const PromptCleaner = (() => {
     if (stats.total === 0 && stats.alerts === 0) return "Aucune donnée sensible détectée";
     return `${stats.total} remplacement(s) (${stats.config} config, ${stats.auto} auto) — ${stats.alerts} alerte(s)`;
   }
-
-  async function doClean() {
-    const input = txtInput.value;
-    if (!input) return;
-    const res = PromptCleaner.clean(input, rules);
-    lastResult = res;
-    renderResult(res);
-    btnCopy.disabled = res.cleanText.length === 0;
-    const copied = res.cleanText.length > 0 && await copyToClipboard(res.cleanText);
-    setStatus(`${describe(res.stats)} — ${copied ? "copié dans le presse-papier ✔" : "utilisez le bouton Copier"}`);
-  }
-
-  btnClean.addEventListener("click", doClean);
-  document.addEventListener("keydown", e => {
-    if (e.ctrlKey && e.key === "Enter" && !btnClean.disabled) { e.preventDefault(); doClean(); }
-  });
 
   btnCopy.addEventListener("click", async () => {
     if (lastResult && lastResult.cleanText.length > 0) {

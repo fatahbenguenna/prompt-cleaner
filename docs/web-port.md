@@ -37,11 +37,28 @@ Garanties :
 |---|---|
 | `OpenFileDialog` pour la config | `<input type="file">` (même explorateur natif) + glisser-déposer sur la page |
 | Auto-chargement de `prompt-cleaner.cfg` à côté de l'exe | Impossible depuis un navigateur → case « mémoriser dans ce navigateur » (localStorage, opt-in) |
+| Bouton Clean | supprimé : nettoyage **automatique** (voir §4bis) |
 | Copie auto dans le presse-papier | `navigator.clipboard.writeText` + repli `execCommand("copy")` |
 | Bouton Coller | `clipboard.readText` si le navigateur l'autorise, sinon message invitant à Ctrl+V |
 | RichTextBox verte/rouge + légende | `<span class="replaced|alert">` (mêmes couleurs, contrastes AA conservés) + légende |
 | Barre d'état | pied de page de statut |
 | Popin « ? » format de config | `<dialog>` natif devenu **éditeur de règles intégré** : pré-rempli avec la config courante (ou l'exemple), compteur de règles en direct, « Utiliser ces règles » applique le contenu sans fichier, « Copier » permet d'en faire un `.cfg` |
+
+## 4bis. Nettoyage automatique (variante web)
+
+Le bouton « Clean » disparaît au profit d'un nettoyage déclenché tout seul,
+contraint par une règle des navigateurs : **le presse-papier n'est accessible
+en écriture que pendant un geste utilisateur**.
+
+| Déclencheur | Nettoyage | Copie presse-papier | Animation de scan |
+|---|---|---|---|
+| Collage (Ctrl+V, clic droit, bouton Coller) | oui | oui (geste présent) | oui |
+| Saisie / édition au clavier | oui (aperçu live, anti-rebond 300 ms) | non — bouton Copier / Ctrl+Entrée | non |
+| Chargement d'un fichier ou application du template (si texte présent) | oui | tentée | oui |
+| Ctrl+Entrée | oui | oui | oui |
+
+Le liseré de scan du bandeau ne s'affiche donc **que le temps d'un nettoyage
+déclenché** (~0,85 s), et non plus en boucle continue.
 
 ## 4. Compromis assumés
 
