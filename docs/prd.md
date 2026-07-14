@@ -3,6 +3,8 @@
 > **Méthode BMAD — Phase 2 : Product Manager (PRD)**
 > Document produit par le rôle *PM* à partir du Project Brief (`docs/brief.md`).
 > Il définit les exigences fonctionnelles (FR), non fonctionnelles (NFR), l'UX et découpe le produit en épics.
+>
+> **Note d'implémentation** : la version retenue est l'application web (`web/index.html`, cf. `docs/web-port.md`). Les mentions d'un exécutable Windows / .NET ci-dessous relèvent du cadrage initial et sont conservées à titre historique ; les exigences fonctionnelles (détecteurs, UX, code couleur) restent valables et sont implémentées dans la version web.
 
 ## 1. Objectif du produit
 
@@ -117,7 +119,7 @@ Après la passe dictionnaire, le texte restant est analysé par des détecteurs 
 | **E5** | Restitution : couleurs, légende, presse-papier | RichTextBox colorée, légende, copie auto, barre d'état | FR-2, FR-5, FR-6 |
 | **E6** | Durcissement & livraison | Robustesse, performance, accessibilité, doc utilisateur, release GitHub | NFR-3→7 |
 
-Le détail des user stories, critères d'acceptation et l'ordonnancement se trouvent dans `docs/backlog.md` (Phase Scrum Master).
+La conception de l'implémentation retenue (application web) est décrite dans `docs/web-port.md`.
 
 ## 6. Hors périmètre (rappel)
 
