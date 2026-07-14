@@ -79,6 +79,10 @@
   label.head { font-weight: 600; }
   #lblConfig { color: #666; font-size: .9rem; }
   .remember { font-size: .85rem; color: #555; user-select: none; }
+  .paste-hint {
+    font-size: .82rem; font-weight: 600; color: var(--replaced-fore);
+    background: var(--replaced-back); border-radius: 3px; padding: 3px 8px;
+  }
   /* Les deux zones occupent ~70 % de la hauteur de la fenêtre (35 vh chacune). */
   textarea, #result {
     width: 100%; height: 35vh; min-height: 150px; padding: 8px;
@@ -166,9 +170,10 @@
     <div class="bar">
       <label class="head" for="txtInput">Texte d'entrée</label>
       <span class="spacer"></span>
-      <button id="btnPaste">Coller</button>
+      <span id="pasteHint" class="paste-hint" hidden>↑ appuyez sur Ctrl+V</span>
+      <button id="btnPaste" title="Prépare le champ : appuyez ensuite sur Ctrl+V pour coller en remplaçant le texte">Coller (Ctrl+V)</button>
     </div>
-    <textarea id="txtInput" spellcheck="false" placeholder="Collez votre texte ici (Ctrl+V) : le nettoyage est automatique…"></textarea>
+    <textarea id="txtInput" spellcheck="false" placeholder="Collez votre texte avec Ctrl+V — le nettoyage est automatique.&#10;(Sur un fichier local, le navigateur n'autorise pas le collage par bouton seul.)"></textarea>
   </section>
 
   <section>
@@ -620,7 +625,7 @@ const PromptCleaner = (() => {
   const $ = id => document.getElementById(id);
   const btnLoadConfig = $("btnLoadConfig"), fileInput = $("fileInput"),
     btnHelp = $("btnHelp"), lblConfig = $("lblConfig"), chkRemember = $("chkRemember"),
-    txtInput = $("txtInput"), btnPaste = $("btnPaste"),
+    txtInput = $("txtInput"), btnPaste = $("btnPaste"), pasteHint = $("pasteHint"),
     btnCopy = $("btnCopy"), btnHistory = $("btnHistory"), result = $("result"), status = $("status"),
     helpDialog = $("helpDialog"), historyDialog = $("historyDialog"), historyList = $("historyList");
 
@@ -719,23 +724,34 @@ const PromptCleaner = (() => {
     }
   }
 
+  // Vrai si le prochain collage clavier doit écraser tout le contenu (armé par
+  // le bouton Coller quand la lecture directe du presse-papier est impossible).
+  let overwriteOnNextPaste = false;
+
   btnPaste.addEventListener("click", async () => {
+    // La lecture directe du presse-papier n'est autorisée que sur une page
+    // hébergée (https) et sur certains navigateurs ; sur un fichier ouvert en
+    // local (file://) elle est presque toujours bloquée. On tente, puis on
+    // bascule sur un repli Ctrl+V qui, lui, fonctionne partout.
     try {
-      const text = await navigator.clipboard.readText();
-      if (text) {
-        // Remplace le contenu existant (pas d'ajout) : inutile de vider avant.
-        txtInput.value = text;
-        refresh({ copy: true, scan: true });
-      } else {
-        setStatus("Le presse-papier ne contient pas de texte.");
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+          txtInput.value = text;               // écrase le contenu existant
+          refresh({ copy: true, scan: true });
+        } else {
+          setStatus("Le presse-papier ne contient pas de texte.");
+        }
+        return;
       }
-    } catch {
-      // Lecture refusée par le navigateur : on sélectionne tout le contenu pour
-      // que le Ctrl+V suivant le remplace au lieu de s'y ajouter.
-      txtInput.focus();
-      txtInput.select();
-      setStatus("Lecture du presse-papier refusée : faites Ctrl+V, le contenu sélectionné sera remplacé.");
-    }
+    } catch { /* lecture refusée : repli ci-dessous */ }
+
+    // Repli universel (fichier local) : le prochain Ctrl+V écrasera tout.
+    overwriteOnNextPaste = true;
+    txtInput.focus();
+    txtInput.select();
+    pasteHint.hidden = false;
+    setStatus("Champ prêt — appuyez sur Ctrl+V : le texte existant sera remplacé.");
   });
 
   // ----- Nettoyage automatique --------------------------------------------------
@@ -787,9 +803,18 @@ const PromptCleaner = (() => {
   txtInput.addEventListener("paste", e => {
     e.preventDefault();
     const pasted = (e.clipboardData || window.clipboardData).getData("text");
-    const el = txtInput, start = el.selectionStart, end = el.selectionEnd;
-    el.value = el.value.slice(0, start) + pasted + el.value.slice(end);
-    el.selectionStart = el.selectionEnd = start + pasted.length;
+    const el = txtInput;
+    if (overwriteOnNextPaste) {
+      // Écrasement demandé via le bouton Coller : on remplace tout.
+      el.value = pasted;
+      el.selectionStart = el.selectionEnd = pasted.length;
+    } else {
+      const start = el.selectionStart, end = el.selectionEnd;
+      el.value = el.value.slice(0, start) + pasted + el.value.slice(end);
+      el.selectionStart = el.selectionEnd = start + pasted.length;
+    }
+    overwriteOnNextPaste = false;
+    pasteHint.hidden = true;
     if (debounceTimer) clearTimeout(debounceTimer);
     refresh({ copy: true, scan: true });
   });

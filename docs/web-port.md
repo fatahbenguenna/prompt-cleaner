@@ -39,7 +39,7 @@ Garanties :
 | Auto-chargement de `prompt-cleaner.cfg` à côté de l'exe | Impossible depuis un navigateur → case « mémoriser dans ce navigateur » (localStorage, opt-in) |
 | Bouton Clean | supprimé : nettoyage **automatique** (voir §4bis) |
 | Copie auto dans le presse-papier | `navigator.clipboard.writeText` + repli `execCommand("copy")` |
-| Bouton Coller | **remplace** le contenu (vide + colle) via `clipboard.readText` ; si refusé, sélectionne tout pour qu'un Ctrl+V remplace au lieu d'ajouter |
+| Bouton « Coller (Ctrl+V) » | sur page hébergée : `clipboard.readText` remplace le contenu en un clic. Sur fichier local (lecture presse-papier interdite par le navigateur) : il prépare le champ (sélection + écrasement armé + indice visible « ↑ appuyez sur Ctrl+V »), et le Ctrl+V remplace alors tout le texte. Le placeholder indique Ctrl+V comme méthode par défaut. |
 | RichTextBox verte/rouge + légende | `<span class="replaced|alert">` (mêmes couleurs, contrastes AA conservés) + légende |
 | Barre d'état | pied de page de statut |
 | Popin « ? » format de config | `<dialog>` natif devenu **éditeur de règles intégré** : pré-rempli avec la config courante (ou l'exemple), compteur de règles en direct, « Utiliser ces règles » applique le contenu sans fichier, « Copier » permet d'en faire un `.cfg` |
@@ -78,8 +78,14 @@ Un bouton « Vider l'historique » remet le compteur à zéro. Les doublons cons
 
 ## 4. Compromis assumés
 
-- La lecture du presse-papier par bouton dépend des permissions du
-  navigateur sur les pages locales ; le collage `Ctrl+V` fonctionne toujours.
+- **Lecture du presse-papier par bouton** : les navigateurs interdisent à une
+  page ouverte en fichier local (`file://`, origine opaque) de lire le
+  presse-papier par programme (et Firefox ne l'autorise jamais pour une page
+  web). Le bouton « Coller » ne peut donc pas récupérer seul le presse-papier
+  dans ce cas : il arme alors un écrasement et un simple `Ctrl+V` remplace tout
+  le texte. La lecture directe par le bouton fonctionne en revanche quand la
+  page est **servie en https** (ex. GitHub Pages, intranet). L'écriture du
+  résultat dans le presse-papier après un collage, elle, marche partout.
 - Pas de fenêtre applicative dédiée : c'est un onglet de navigateur.
 - Les très gros textes (> quelques Mo) sont traités de façon synchrone :
   acceptable pour l'usage visé (prompts, logs).
