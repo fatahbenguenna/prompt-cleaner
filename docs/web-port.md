@@ -39,7 +39,7 @@ Garanties :
 | Auto-chargement de `prompt-cleaner.cfg` à côté de l'exe | Impossible depuis un navigateur → case « mémoriser dans ce navigateur » (localStorage, opt-in) |
 | Bouton Clean | supprimé : nettoyage **automatique** (voir §4bis) |
 | Copie auto dans le presse-papier | `navigator.clipboard.writeText` + repli `execCommand("copy")` |
-| Bouton Coller | **remplace** le contenu via `clipboard.readText` (page hébergée) ; sur fichier local où la lecture est bloquée, il arme l'écrasement puis un Ctrl+V remplace tout le texte |
+| Bouton « Coller (Ctrl+V) » | sur page hébergée : `clipboard.readText` remplace le contenu en un clic. Sur fichier local (lecture presse-papier interdite par le navigateur) : il prépare le champ (sélection + écrasement armé + indice visible « ↑ appuyez sur Ctrl+V »), et le Ctrl+V remplace alors tout le texte. Le placeholder indique Ctrl+V comme méthode par défaut. |
 | RichTextBox verte/rouge + légende | `<span class="replaced|alert">` (mêmes couleurs, contrastes AA conservés) + légende |
 | Barre d'état | pied de page de statut |
 | Popin « ? » format de config | `<dialog>` natif devenu **éditeur de règles intégré** : pré-rempli avec la config courante (ou l'exemple), compteur de règles en direct, « Utiliser ces règles » applique le contenu sans fichier, « Copier » permet d'en faire un `.cfg` |
