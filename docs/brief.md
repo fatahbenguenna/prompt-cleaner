@@ -2,6 +2,8 @@
 
 > **Méthode BMAD — Phase 1 : Analyste (Business Analysis)**
 > Document produit par le rôle *Analyst*. Il cadre le problème, le marché cible et les contraintes avant la rédaction du PRD.
+>
+> **Note d'implémentation** : la version retenue est l'application web (`web/index.html`, cf. `docs/web-port.md`). Le cadrage ci-dessous, rédigé pour un exécutable Windows portable, reste pertinent pour le besoin ; la portabilité « sans installation » est désormais assurée par un simple fichier HTML ouvert dans le navigateur.
 
 ## 1. Résumé exécutif
 

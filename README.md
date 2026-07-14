@@ -1,77 +1,56 @@
 # prompt-cleaner
 
-Application Windows fenêtrée **100 % portable** (un seul `.exe`, aucune installation) qui nettoie un texte de ses données personnelles/confidentielles et copie automatiquement le résultat dans le presse-papier.
+Application web **100 % portable et hors-ligne**, en un seul fichier `web/index.html`, qui nettoie un texte de ses données personnelles/confidentielles et copie le résultat dans le presse-papier. Aucune installation, aucun serveur, aucun exécutable : elle s'ouvre par double-clic dans n'importe quel navigateur (Windows, macOS, Linux).
 
-## Téléchargement
+## Utilisation
 
-Récupérez `prompt-cleaner.exe` dans les [Releases GitHub](../../releases) (ou dans les artefacts de CI de n'importe quel run). Aucune installation, aucun droit administrateur, aucun runtime requis : posez le fichier où vous voulez (clé USB comprise) et double-cliquez. Windows 10/11 x64.
-
-> **Premier lancement lent ?** C'est attendu pour un exécutable autonome de ~65 Mo téléchargé d'Internet : Windows le marque (« Mark of the Web »), SmartScreen interroge sa réputation en ligne et l'antivirus scanne l'intégralité du fichier ; l'application extrait aussi ses bibliothèques natives dans `%TEMP%` la première fois. Les lancements suivants sont bien plus rapides. Pour accélérer : clic droit → *Propriétés* → cochez **Débloquer** (ou `Unblock-File prompt-cleaner.exe` en PowerShell). L'exécutable n'étant pas signé numériquement, ces vérifications sont plus longues que pour un logiciel signé.
-
-## Fonctionnement en bref
-
-1. **Charger config…** : sélection via l'explorateur Windows d'un fichier de règles `motclé : remplacement` :
-   ```
-   google : mon-entreprise
-   fb44ja8k : nom-user
-   myApp : nom-application
-   ```
-   Le bouton « ? » à côté de « Charger config… » rappelle ce format dans l'application, avec un exemple copiable.
-2. L'utilisateur colle son texte et clique sur **Clean**.
-3. **Passe 1** : remplacement de toutes les occurrences des mots-clés du dictionnaire.
-4. **Passe 2 (autonome)** : détection résiduelle — chemins `C:\Users\<nom>` (→ `XX_USER_XX`), e-mails, IP, téléphones, IBAN, cartes bancaires… remplacés ; GUID, secrets probables et URLs internes signalés en alerte.
-5. Le résultat s'affiche avec un code couleur (légende incluse) et est **copié automatiquement dans le presse-papier** :
+1. Ouvrez `web/index.html` dans votre navigateur (double-clic, ou glisser-déposer dans un onglet).
+2. Collez votre texte dans la zone d'entrée avec **Ctrl+V** — le nettoyage est **automatique** :
+   - **Passe 1** : remplacement des mots-clés de votre dictionnaire de règles (facultatif) ;
+   - **Passe 2 (autonome)** : détection résiduelle — chemins `C:\Users\<nom>` (→ `XX_USER_XX`), e-mails, IP, téléphones, IBAN, cartes bancaires… remplacés ; GUID, secrets probables et URLs internes signalés en alerte.
+3. Le résultat s'affiche avec un code couleur (légende incluse) et est **copié automatiquement dans le presse-papier** :
    - 🟩 **vert** : mot remplacé,
    - 🟥 **rouge** : donnée suspecte non remplacée, à vérifier manuellement.
 
-Raccourcis clavier : `Alt+C` charger la config, `Alt+O` coller, `Alt+L` ou `Ctrl+Entrée` nettoyer, `Alt+P` copier.
+Le bouton **Vider** réinitialise la zone en un clic ; **Copier** (ou Ctrl+Entrée) replace le résultat dans le presse-papier après une saisie manuelle.
 
-## Variante web (zéro exécutable)
+## Affiner l'anonymisation (facultatif)
 
-Si l'exécutable subit trop de friction antivirus/SmartScreen sur votre poste, la même application existe en **un seul fichier `web/index.html`** : téléchargez-le et double-cliquez — il s'ouvre dans votre navigateur, fonctionne 100 % hors-ligne (une CSP intégrée lui interdit tout appel réseau) et embarque le même moteur de nettoyage (dictionnaire + détecteurs D-01 à D-12). Le chargement de la config passe par le même explorateur de fichiers (ou un glisser-déposer), et une case « mémoriser dans ce navigateur » remplace l'auto-chargement du `.cfg`. Le bouton « ? » ouvre un **éditeur de règles intégré** : définissez ou modifiez vos règles directement dans la page et appliquez-les sans passer par un fichier.
+Le nettoyage automatique fonctionne sans configuration. Pour aller plus loin, le panneau latéral permet de fournir un dictionnaire de règles `motclé : remplacement` :
 
-Le nettoyage y est **automatique** : à un collage, le texte est nettoyé et le résultat copié dans le presse-papier immédiatement (un bref balayage lumineux du bandeau signale le scan) ; une saisie au clavier met le résultat à jour en direct, le bouton **Copier** (ou Ctrl+Entrée) servant alors à le placer dans le presse-papier. Le bouton **Coller** remplace le contenu existant (pas besoin de vider avant).
+```
+google : mon-entreprise
+fb44ja8k : nom-user
+myApp : nom-application
+```
 
-Un **historique de session** (bouton « Historique ») mémorise chaque traitement — texte d'entrée, sortie nettoyée et règles utilisées — et permet de les recharger. Il reste en mémoire uniquement (rien sur le disque) et disparaît à la fermeture de la page. Voir `docs/web-port.md` pour les détails et compromis.
+Deux façons de le faire : **charger un fichier** `.cfg`/`.txt` (bouton « Charger config… » ou glisser-déposer), ou **éditer les règles directement dans la page** via le bouton « ? » (éditeur intégré, applicable sans fichier). Une case « mémoriser dans ce navigateur » conserve les règles d'une visite à l'autre (stockage local, jamais envoyé en ligne).
 
-## Technologie retenue
+## Historique de session
 
-**C# / .NET 8 WinForms**, publié en *self-contained single-file* (`win-x64`) : un unique `prompt-cleaner.exe` embarquant le runtime — double-clic sur tout Windows 10/11, y compris depuis une clé USB, sans droits administrateur. Hors-ligne par conception : aucun appel réseau, aucune écriture disque du texte traité. Le choix est argumenté (matrice de décision) dans `docs/architecture.md`.
+Le bouton « Historique » mémorise chaque traitement — texte d'entrée, sortie nettoyée et règles utilisées — et permet de les recharger. Il reste **en mémoire uniquement** (rien n'est écrit sur le disque) et disparaît à la fermeture ou au rechargement de la page.
 
-## Documentation projet (méthode BMAD)
+## Confidentialité
 
-| Phase BMAD | Document |
-|---|---|
-| 1. Analyste — Project Brief | [`docs/brief.md`](docs/brief.md) |
-| 2. PM — PRD (exigences, UX, épics) | [`docs/prd.md`](docs/prd.md) |
-| 3. Architecte — Architecture & choix techno | [`docs/architecture.md`](docs/architecture.md) |
-| 4. PO/SM — Backlog (stories, critères, itérations) | [`docs/backlog.md`](docs/backlog.md) |
+L'application est **hors-ligne par construction** : une politique de sécurité de contenu (CSP `default-src 'none'`) intégrée au fichier lui interdit tout appel réseau — vérifiable en ouvrant `web/index.html`. Aucune donnée ne quitte le navigateur, rien n'est écrit sur le disque.
 
-## État d'avancement
-
-| Itération (cf. `docs/backlog.md`) | Contenu | État |
-|---|---|---|
-| 1 | Solution .NET, fenêtre principale, publication portable, CI | ✅ fait |
-| 2 | Fichier de config (parseur, explorateur, auto-chargement), passe dictionnaire | ✅ fait |
-| 3–4 | Détecteurs autonomes D-01 à D-12 | ✅ fait |
-| 5 | Boucle presse-papier + rendu couleur | ✅ fait |
-| 6 | Durcissement, accessibilité, release v1.0.0 | ✅ fait |
+> **Note sur le bouton de collage** : les navigateurs interdisent à une page ouverte en fichier local (`file://`) de lire le presse-papier par programme — le collage se fait donc au clavier avec **Ctrl+V** (`Ctrl+A` puis `Ctrl+V` pour remplacer tout le texte). Si la page est servie en https (voir ci-dessous), cette restriction disparaît.
 
 ## Développement
 
-```bash
-dotnet build          # compile la solution (Windows, Linux ou macOS)
-dotnet test           # exécute les tests unitaires du moteur
+Le moteur de nettoyage (JavaScript) est délimité dans `web/index.html` par les marqueurs `/*ENGINE-START*/ … /*ENGINE-END*/`. La suite de tests `web/test.mjs` (Node, sans dépendance) l'extrait et le soumet à une batterie de cas :
 
-# Produit l'exécutable portable unique (publish/prompt-cleaner.exe) :
-dotnet publish src/PromptCleaner.App -c Release -r win-x64 --self-contained true \
-  -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true \
-  -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishReadyToRun=true -o publish
+```bash
+node web/test.mjs
 ```
 
-La CI GitHub Actions (`.github/workflows/ci.yml`) rejoue build + tests + publication à chaque push et attache l'exécutable en artefact ; un tag `v*` crée une Release GitHub avec l'exe en pièce jointe.
+La CI GitHub Actions (`.github/workflows/ci.yml`) rejoue ces tests à chaque push. Des fichiers d'exemple sont fournis dans `samples/` (`regles-exemple.cfg`, `texte-exemple.txt`).
 
-Des fichiers d'exemple sont fournis dans `samples/` (`regles-exemple.cfg`, `texte-exemple.txt`).
+## Documentation
+
+- [`docs/brief.md`](docs/brief.md) — cadrage du besoin (Project Brief).
+- [`docs/prd.md`](docs/prd.md) — exigences fonctionnelles, détecteurs D-01 à D-12, UX.
+- [`docs/web-port.md`](docs/web-port.md) — conception de l'application web, comportements et compromis.
 
 ## Avertissement
 

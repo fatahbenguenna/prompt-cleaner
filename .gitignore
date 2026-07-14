@@ -1,14 +1,10 @@
-# Sorties de build .NET
-bin/
-obj/
-publish/
+# Dépendances / outils
+node_modules/
 
 # IDE
 .vs/
 .idea/
 *.user
-*.suo
 
-# Tests
-TestResults/
-*.trx
+# Divers
+*.log

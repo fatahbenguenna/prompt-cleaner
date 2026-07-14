@@ -1,7 +1,10 @@
 # Portage web — prompt-cleaner en un seul fichier `index.html`
 
-> Addendum aux documents BMAD (`brief.md`, `prd.md`, `architecture.md`).
-> Décision prise après retour terrain sur la v1 WinForms.
+> Conception de l'application web — **implémentation retenue** — en complément du
+> Project Brief (`brief.md`) et du PRD (`prd.md`).
+> Une première implémentation Windows (.NET WinForms) avait été réalisée puis
+> retirée du dépôt au profit de cette version web ; les paragraphes ci-dessous qui
+> la mentionnent sont conservés comme justification de la bascule.
 
 ## 1. Motivation
 
